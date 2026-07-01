@@ -18,12 +18,15 @@ public final class RickExplorerServer {
         int listenPort = Integer.parseInt(env("EXPLORER_PORT", String.valueOf(NetworkParameters.EXPLORER_PORT)));
         String bindHost = env("BIND_HOST", NetworkParameters.SERVER_BIND_HOST);
 
-        io.javalin.Javalin app = io.javalin.Javalin.create(config -> config.showJavalinBanner = false);
+        io.javalin.Javalin app = JavalinSupport.createApp();
         ServerSupport.configureErrors(app);
         app.get("/ext/health", ctx -> {
             try {
                 rpcClient.call("getblockcount", new JsonArray());
-                JsonResponses.write(ctx, java.util.Map.of("explorer", "ok", "rpc", "ok"));
+                JsonObject ok = new JsonObject();
+                ok.addProperty("explorer", "ok");
+                ok.addProperty("rpc", "ok");
+                JsonResponses.write(ctx, ok);
             } catch (IOException error) {
                 JsonResponses.error(ctx, 502, error.getMessage());
             }

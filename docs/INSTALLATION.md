@@ -50,7 +50,8 @@ bash scripts/build-server-services.sh
 Inicie ambos (JSON apenas, sem interface web):
 
 ```bash
-export RICK_RPC_PASSWORD=<senha-forte>
+# Nao exporte RICK_RPC_USER manualmente — o script le ~/.InfiniteRicks/InfiniteRicks.conf
+bash scripts/build-server-services.sh
 bash scripts/run-server-services.sh
 ```
 

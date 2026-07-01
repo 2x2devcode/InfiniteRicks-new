@@ -106,12 +106,15 @@ public final class RickServer {
         int listenPort = Integer.parseInt(env("PORT", String.valueOf(NetworkParameters.OFFICIAL_API_PORT)));
         String bindHost = env("BIND_HOST", NetworkParameters.SERVER_BIND_HOST);
 
-        io.javalin.Javalin app = io.javalin.Javalin.create(config -> config.showJavalinBanner = false);
+        io.javalin.Javalin app = JavalinSupport.createApp();
         ServerSupport.configureErrors(app);
         app.get("/api/health", ctx -> {
             try {
                 rpcClient.call("getblockcount", new JsonArray());
-                JsonResponses.write(ctx, java.util.Map.of("api", "ok", "rpc", "ok"));
+                JsonObject ok = new JsonObject();
+                ok.addProperty("api", "ok");
+                ok.addProperty("rpc", "ok");
+                JsonResponses.write(ctx, ok);
             } catch (IOException error) {
                 JsonResponses.error(ctx, 502, error.getMessage());
             }
