@@ -6,10 +6,19 @@
     android:orientation="vertical"
     android:padding="20dp">
 
+    <Button
+        android:id="@+id/scanQrButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:backgroundTint="@color/rick_surface"
+        android:text="Ler QR Code"
+        android:textColor="@color/rick_text" />
+
     <EditText
         android:id="@+id/destinationInput"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
         android:hint="Endereço RICK"
         android:textColor="@color/rick_text"
         android:textColorHint="@color/rick_muted" />

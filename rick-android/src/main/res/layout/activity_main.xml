@@ -46,6 +46,16 @@
             android:layout_height="wrap_content"
             android:text="Criar nova carteira"
             android:textColor="@color/rick_muted" />
+
+        <Button
+            android:id="@+id/authBiometricButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Entrar com biometria"
+            android:textColor="@color/rick_green"
+            android:visibility="gone" />
     </LinearLayout>
 
     <LinearLayout

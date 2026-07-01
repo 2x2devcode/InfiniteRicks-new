@@ -13,6 +13,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.infinitericks.wallet.R;
+import com.infinitericks.wallet.api.RickApiClient;
 import com.infinitericks.wallet.core.chain.NetworkParameters;
 import com.infinitericks.wallet.data.WalletRepository;
 import com.infinitericks.wallet.ui.MainActivity;
@@ -41,14 +42,17 @@ public final class HomeFragment extends Fragment {
         repository.activeAccount().ifPresentOrElse(account -> repository.runIo(() -> {
             try {
                 String balance = repository.refreshBalance(account.address());
-                repository.api().getStatus();
+                RickApiClient.NetworkStatus status = repository.refreshNetworkStatus();
                 requireActivity().runOnUiThread(() -> {
                     balanceValue.setText(balance + " " + NetworkParameters.TICKER);
-                    networkStatus.setText("API oficial conectada com pinning TLS.");
+                    networkStatus.setText(
+                            "Rede: " + status.blocks() + " blocos via " + status.source()
+                                    + " | peers " + status.peers()
+                    );
                 });
             } catch (Exception e) {
                 requireActivity().runOnUiThread(() -> {
-                    networkStatus.setText("API indisponível. Tentando fallback do explorer.");
+                    networkStatus.setText("Rede indisponível. Verifique API e explorer.");
                     Toast.makeText(requireContext(), e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }

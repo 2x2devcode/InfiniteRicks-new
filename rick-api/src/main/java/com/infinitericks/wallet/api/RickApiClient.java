@@ -33,21 +33,39 @@ public final class RickApiClient {
     }
 
     public NetworkStatus getStatus() throws IOException {
-        JsonObject json = getJson(ApiEndpoints.STATUS, false);
-        return new NetworkStatus(
-                json.get("online").getAsBoolean(),
-                json.get("chain").getAsString(),
-                json.get("blocks").getAsLong(),
-                json.get("headers").getAsLong(),
-                json.get("progress").getAsDouble(),
-                json.get("peers").getAsInt()
-        );
+        try {
+            JsonObject json = getJson(ApiEndpoints.STATUS, true);
+            return new NetworkStatus(
+                    json.get("online").getAsBoolean(),
+                    json.get("chain").getAsString(),
+                    json.get("blocks").getAsLong(),
+                    json.get("headers").getAsLong(),
+                    json.get("progress").getAsDouble(),
+                    json.get("peers").getAsInt(),
+                    "official-api"
+            );
+        } catch (IOException officialError) {
+            ExplorerSummary explorer = getExplorerSummary();
+            return new NetworkStatus(
+                    true,
+                    "main",
+                    explorer.blockCount(),
+                    explorer.blockCount(),
+                    100.0,
+                    explorer.connections(),
+                    "explorer-fallback"
+            );
+        }
     }
 
     public String getBalance(String address) throws IOException {
-        return getJson(String.format(Locale.US, ApiEndpoints.ADDRESS_BALANCE, address), true)
-                .get("balance")
-                .getAsString();
+        try {
+            return getJson(String.format(Locale.US, ApiEndpoints.ADDRESS_BALANCE, address), true)
+                    .get("balance")
+                    .getAsString();
+        } catch (IOException officialError) {
+            return getExplorerBalance(address);
+        }
     }
 
     public List<Utxo> getUtxos(String address) throws IOException {
@@ -67,7 +85,11 @@ public final class RickApiClient {
     }
 
     public long getFeePerKb() throws IOException {
-        return getJson(ApiEndpoints.FEE, true).get("feePerKbSatoshis").getAsLong();
+        try {
+            return getJson(ApiEndpoints.FEE, true).get("feePerKbSatoshis").getAsLong();
+        } catch (IOException ignored) {
+            return NetworkParameters.DEFAULT_FEE_PER_KB;
+        }
     }
 
     public String broadcast(String rawHex) throws IOException {
@@ -78,6 +100,33 @@ public final class RickApiClient {
     }
 
     public ExplorerSummary getExplorerSummary() throws IOException {
+        return fetchExplorerSummary();
+    }
+
+    public String getExplorerBalance(String address) throws IOException {
+        Request request = new Request.Builder()
+                .url(NetworkParameters.EXPLORER_BASE_URL + String.format(Locale.US, ApiEndpoints.EXPLORER_ADDRESS, address))
+                .get()
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful() || response.body() == null) {
+                throw new IOException("explorer HTTP " + response.code());
+            }
+            JsonObject json = gson.fromJson(response.body().string(), JsonObject.class);
+            if (json.has("balance")) {
+                return json.get("balance").getAsString();
+            }
+            if (json.has("final_balance")) {
+                return json.get("final_balance").getAsString();
+            }
+            if (json.has("total_received")) {
+                return json.get("total_received").getAsString();
+            }
+            throw new IOException("explorer response missing balance");
+        }
+    }
+
+    private ExplorerSummary fetchExplorerSummary() throws IOException {
         Request request = new Request.Builder()
                 .url(NetworkParameters.EXPLORER_BASE_URL + ApiEndpoints.EXPLORER_SUMMARY)
                 .get()
@@ -154,7 +203,15 @@ public final class RickApiClient {
         }
     }
 
-    public record NetworkStatus(boolean online, String chain, long blocks, long headers, double progress, int peers) {
+    public record NetworkStatus(
+            boolean online,
+            String chain,
+            long blocks,
+            long headers,
+            double progress,
+            int peers,
+            String source
+    ) {
     }
 
     public record Utxo(String txid, int vout, long amountSatoshis, int confirmations) {

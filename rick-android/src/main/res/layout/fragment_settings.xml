@@ -5,9 +5,32 @@
     android:background="@color/rick_background"
     android:padding="20dp">
 
-    <TextView
-        android:id="@+id/settingsInfo"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="@color/rick_text" />
+        android:orientation="vertical">
+
+        <Button
+            android:id="@+id/enableBiometricButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:backgroundTint="@color/rick_green"
+            android:text="Ativar desbloqueio por biometria" />
+
+        <Button
+            android:id="@+id/disableBiometricButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:backgroundTint="@color/rick_surface"
+            android:text="Desativar biometria"
+            android:textColor="@color/rick_text" />
+
+        <TextView
+            android:id="@+id/settingsInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:textColor="@color/rick_text" />
+    </LinearLayout>
 </ScrollView>

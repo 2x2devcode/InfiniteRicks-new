@@ -16,6 +16,7 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.infinitericks.wallet.R;
 import com.infinitericks.wallet.RickWalletApp;
 import com.infinitericks.wallet.data.WalletRepository;
+import com.infinitericks.wallet.security.BiometricVault;
 import com.infinitericks.wallet.ui.home.HomeFragment;
 import com.infinitericks.wallet.ui.receive.ReceiveFragment;
 import com.infinitericks.wallet.ui.send.SendFragment;
@@ -24,24 +25,30 @@ import com.infinitericks.wallet.ui.wallets.WalletsFragment;
 
 public final class MainActivity extends AppCompatActivity {
     private WalletRepository repository;
+    private BiometricVault biometricVault;
     private View authContainer;
     private View walletContainer;
     private EditText passwordInput;
     private TextView authTitle;
     private Button authActionButton;
     private Button authSecondaryButton;
+    private Button authBiometricButton;
+    private boolean unlocked;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        repository = ((RickWalletApp) getApplication()).walletRepository();
+        RickWalletApp app = (RickWalletApp) getApplication();
+        repository = app.walletRepository();
+        biometricVault = app.biometricVault();
         authContainer = findViewById(R.id.authContainer);
         walletContainer = findViewById(R.id.walletContainer);
         passwordInput = findViewById(R.id.passwordInput);
         authTitle = findViewById(R.id.authTitle);
         authActionButton = findViewById(R.id.authActionButton);
         authSecondaryButton = findViewById(R.id.authSecondaryButton);
+        authBiometricButton = findViewById(R.id.authBiometricButton);
 
         if (repository.hasWallet()) {
             showUnlock();
@@ -51,6 +58,7 @@ public final class MainActivity extends AppCompatActivity {
 
         authActionButton.setOnClickListener(v -> onAuthPrimary());
         authSecondaryButton.setOnClickListener(v -> onAuthSecondary());
+        authBiometricButton.setOnClickListener(v -> unlockWithBiometric());
 
         BottomNavigationView navigation = findViewById(R.id.bottomNavigation);
         navigation.setOnItemSelectedListener(item -> {
@@ -75,8 +83,24 @@ public final class MainActivity extends AppCompatActivity {
         });
     }
 
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (unlocked) {
+            repository.lock();
+            unlocked = false;
+            walletContainer.setVisibility(View.GONE);
+            authContainer.setVisibility(View.VISIBLE);
+            showUnlock();
+        }
+    }
+
     public WalletRepository repository() {
         return repository;
+    }
+
+    public BiometricVault biometricVault() {
+        return biometricVault;
     }
 
     private void onAuthPrimary() {
@@ -98,6 +122,24 @@ public final class MainActivity extends AppCompatActivity {
         } else {
             showUnlock();
         }
+    }
+
+    private void unlockWithBiometric() {
+        if (!biometricVault.isEnabled()) {
+            toast("Ative a biometria em Config após o primeiro desbloqueio.");
+            return;
+        }
+        biometricVault.authenticate(this, new BiometricVault.Callback() {
+            @Override
+            public void onSuccess(String walletPassword) {
+                unlock(walletPassword);
+            }
+
+            @Override
+            public void onError(String message) {
+                toast(message);
+            }
+        });
     }
 
     private void create(String password) {
@@ -127,6 +169,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void enterWallet() {
+        unlocked = true;
         authContainer.setVisibility(View.GONE);
         walletContainer.setVisibility(View.VISIBLE);
         getSupportFragmentManager()
@@ -139,12 +182,16 @@ public final class MainActivity extends AppCompatActivity {
         authTitle.setText("Criar carteira InfiniteRicks");
         authActionButton.setText("Criar carteira");
         authSecondaryButton.setText("Já tenho carteira");
+        authBiometricButton.setVisibility(View.GONE);
     }
 
     private void showUnlock() {
         authTitle.setText("Desbloquear carteira");
         authActionButton.setText("Entrar");
         authSecondaryButton.setText("Criar nova carteira");
+        authBiometricButton.setVisibility(
+                biometricVault.isEnabled() && biometricVault.isAvailable(this) ? View.VISIBLE : View.GONE
+        );
     }
 
     private void toast(String message) {

@@ -55,14 +55,16 @@ APK: `rick-android/build/outputs/apk/release/rick-android-release.apk`
 ## 5. Assinatura de release
 
 ```bash
-keytool -genkey -v \
-  -keystore infinitericks-wallet.jks \
-  -alias infinitericks \
-  -keyalg RSA -keysize 2048 -validity 10000 \
-  -dname "CN=InfiniteRicks Wallet, OU=InfiniteRicks, O=InfiniteRicksCoin, L=BR, ST=BR, C=BR"
+bash scripts/generate-release-keystore.sh
 ```
 
-Configure `signingConfigs` no Gradle para builds de produção.
+O script cria `release/infinitericks-wallet.jks` e `keystore.properties` (ambos gitignored). O Gradle lê essas propriedades automaticamente para `assembleRelease`.
+
+Para senhas personalizadas:
+
+```bash
+STORE_PASS='sua-senha' KEY_PASS='sua-senha' bash scripts/generate-release-keystore.sh
+```
 
 ## 6. Publicar explorer fallback
 

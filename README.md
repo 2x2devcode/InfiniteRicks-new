@@ -23,6 +23,14 @@ Fonte: [InfiniteRicks oficial](https://github.com/2x2devcode/InfiniteRicks)
 - Assinatura: secp256k1 + DER + `SIGHASH_ALL`
 - Mensagem: `InfiniteRicks Signed Message:\n`
 
+## Recursos (v1.1.0)
+
+- Desbloqueio biométrico (impressão digital / face) com Android Keystore
+- QR code para receber e escanear endereços ao enviar
+- Restauração de carteira via WIF na aba Receber
+- Fallback automático para `explorer2.infinitericks.com` quando a API principal falha
+- Bloqueio automático da sessão ao sair do app
+
 ## Segurança
 
 - Chaves privadas somente no dispositivo
@@ -38,6 +46,7 @@ Fonte: [InfiniteRicks oficial](https://github.com/2x2devcode/InfiniteRicks)
 ```bash
 ./gradlew :rick-core:test
 ./gradlew :rick-server:build
+bash scripts/generate-release-keystore.sh   # primeira vez
 ./gradlew :rick-android:assembleRelease
 ```
 

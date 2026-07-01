@@ -72,6 +72,14 @@ public final class WalletRepository {
         persist(password, store);
     }
 
+    public void importWifToSession(String label, String wif) {
+        if (sessionPassword == null) {
+            throw new IllegalStateException("wallet locked");
+        }
+        walletStore.addAccount(WalletAccount.fromWif(label, wif));
+        saveWalletSnapshot();
+    }
+
     public List<WalletAccount> accounts() {
         return walletStore.accounts();
     }
@@ -109,6 +117,10 @@ public final class WalletRepository {
 
     public String refreshBalance(String address) throws Exception {
         return apiClient.getBalance(address);
+    }
+
+    public RickApiClient.NetworkStatus refreshNetworkStatus() throws Exception {
+        return apiClient.getStatus();
     }
 
     public String send(String destination, String amountText) throws Exception {
