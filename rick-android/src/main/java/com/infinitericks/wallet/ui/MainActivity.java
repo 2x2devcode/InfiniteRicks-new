@@ -2,6 +2,7 @@ package com.infinitericks.wallet.ui;
 
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -24,6 +25,13 @@ import com.infinitericks.wallet.ui.settings.SettingsFragment;
 import com.infinitericks.wallet.ui.wallets.WalletsFragment;
 
 public final class MainActivity extends AppCompatActivity {
+    private static final String TAG = "RickWallet";
+
+    private enum AuthMode {
+        CREATE,
+        UNLOCK
+    }
+
     private WalletRepository repository;
     private BiometricVault biometricVault;
     private View authContainer;
@@ -33,6 +41,7 @@ public final class MainActivity extends AppCompatActivity {
     private Button authActionButton;
     private Button authSecondaryButton;
     private Button authBiometricButton;
+    private AuthMode authMode = AuthMode.UNLOCK;
     private boolean unlocked;
 
     @Override
@@ -91,6 +100,7 @@ public final class MainActivity extends AppCompatActivity {
             unlocked = false;
             walletContainer.setVisibility(View.GONE);
             authContainer.setVisibility(View.VISIBLE);
+            passwordInput.setText("");
             showUnlock();
         }
     }
@@ -109,15 +119,15 @@ public final class MainActivity extends AppCompatActivity {
             toast("Use uma senha com pelo menos 8 caracteres.");
             return;
         }
-        if (repository.hasWallet()) {
-            unlock(password);
-        } else {
+        if (authMode == AuthMode.CREATE) {
             create(password);
+        } else {
+            unlock(password);
         }
     }
 
     private void onAuthSecondary() {
-        if (repository.hasWallet()) {
+        if (authMode == AuthMode.UNLOCK) {
             showCreate();
         } else {
             showUnlock();
@@ -146,9 +156,10 @@ public final class MainActivity extends AppCompatActivity {
         repository.runIo(() -> {
             try {
                 repository.createWallet(password);
-                runOnUiThread(this::enterWallet);
+                postToUi(this::enterWallet);
             } catch (Exception e) {
-                runOnUiThread(() -> toast("Falha ao criar carteira: " + e.getMessage()));
+                Log.e(TAG, "create wallet failed", e);
+                postToUi(() -> toast("Falha ao criar carteira: " + rootMessage(e)));
             }
         });
     }
@@ -161,9 +172,10 @@ public final class MainActivity extends AppCompatActivity {
         repository.runIo(() -> {
             try {
                 repository.unlock(password);
-                runOnUiThread(this::enterWallet);
+                postToUi(this::enterWallet);
             } catch (Exception e) {
-                runOnUiThread(() -> toast("Falha ao desbloquear: " + e.getMessage()));
+                Log.e(TAG, "unlock wallet failed", e);
+                postToUi(() -> toast("Falha ao desbloquear: " + rootMessage(e)));
             }
         });
     }
@@ -179,19 +191,43 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void showCreate() {
+        authMode = AuthMode.CREATE;
         authTitle.setText("Criar carteira InfiniteRicks");
         authActionButton.setText("Criar carteira");
-        authSecondaryButton.setText("Já tenho carteira");
+        authSecondaryButton.setText(repository.hasWallet() ? "Já tenho carteira" : "Voltar");
         authBiometricButton.setVisibility(View.GONE);
+        passwordInput.setText("");
     }
 
     private void showUnlock() {
+        authMode = AuthMode.UNLOCK;
         authTitle.setText("Desbloquear carteira");
         authActionButton.setText("Entrar");
         authSecondaryButton.setText("Criar nova carteira");
         authBiometricButton.setVisibility(
                 biometricVault.isEnabled() && biometricVault.isAvailable(this) ? View.VISIBLE : View.GONE
         );
+        passwordInput.setText("");
+    }
+
+    private void postToUi(Runnable action) {
+        if (isFinishing()) {
+            return;
+        }
+        runOnUiThread(() -> {
+            if (!isFinishing()) {
+                action.run();
+            }
+        });
+    }
+
+    private static String rootMessage(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null) {
+            current = current.getCause();
+        }
+        String message = current.getMessage();
+        return message == null || message.isBlank() ? current.getClass().getSimpleName() : message;
     }
 
     private void toast(String message) {
