@@ -23,10 +23,12 @@ Testes cobrem:
 
 Pins atuais (mar/2026):
 
-| Host | SHA-256 pin |
-|---|---|
-| `server.infinitericks.com` | `9b4f332fd9687204011bc49c837eead6c0836e2bd34bb7c783a9571856bb95ff` |
-| `serverexplorer.infinitericks.com` | `dabe0a18c44990c5cc23ae8499a3cd4d2d0829aa75be1549cab02520503af83a` |
+| Host | SPKI SHA-256 (hex, em `pin_config.cpp`) | OkHttp pin (base64) |
+|---|---|---|
+| `server.infinitericks.com` | `9b4f332fd9687204011bc49c837eead6c0836e2bd34bb7c783a9571856bb95ff` | `m08zL9locgQBG8Scg37q1sCDbivTS7fHg6lXGFa7lf8=` |
+| `serverexplorer.infinitericks.com` | `dabe0a18c44990c5cc23ae8499a3cd4d2d0829aa75be1549cab02520503af83a` | `2r4KGMRJkMXMI66EmaPNTS0IKap1vhVJyrAlIFA6+Do=` |
+
+O JNI armazena o hash em **hex**; `CertificatePin.okHttpPinFromHex()` converte para o formato `sha256/<base64>` exigido pelo OkHttp.
 
 1. Obtenha o SHA-256 da chave pública TLS:
 

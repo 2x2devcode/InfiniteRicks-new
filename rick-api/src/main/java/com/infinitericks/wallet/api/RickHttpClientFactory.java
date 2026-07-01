@@ -25,7 +25,7 @@ public final class RickHttpClientFactory {
         CertificatePinner.Builder pinnerBuilder = new CertificatePinner.Builder();
         for (String host : pinProvider.pinnedHosts()) {
             for (String pin : pinProvider.pinsForHost(host)) {
-                pinnerBuilder.add(host, "sha256/" + pin);
+                pinnerBuilder.add(host, CertificatePin.okHttpPinFromHex(pin));
             }
         }
         return new OkHttpClient.Builder()
