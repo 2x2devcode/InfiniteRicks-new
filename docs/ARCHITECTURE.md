@@ -16,8 +16,8 @@ flowchart TB
     end
 
     subgraph Remote
-        Server[server.infinitericks.com]
-        Explorer[explorer2.infinitericks.com]
+        Server["server.infinitericks.com:40002"]
+        Explorer["server.infinitericks.com:40051"]
     end
 
   UI --> Repo
@@ -46,10 +46,14 @@ Cliente HTTP com:
 - Sem chave de API no APK
 
 ### `rick-server`
-Servidor REST Java (Javalin) que traduz:
-- `/api/status` → `getinfo`
-- `/api/address/{addr}/utxos` → `listunspent`
-- `/api/tx/broadcast` → `sendrawtransaction`
+Dois processos JSON (sem interface web) no mesmo servidor:
+
+| Classe | Porta | Rotas |
+|---|---|---|
+| `RickServer` | 40002 | `/api/status`, `/api/address/...`, `/api/tx/broadcast` |
+| `RickExplorerServer` | 40051 | `/ext/getsummary`, `/ext/getaddress/{addr}` |
+
+Scripts: `scripts/build-server-services.sh`, `scripts/run-server-services.sh`
 
 ### `rick-android`
 - Activity única + fragments

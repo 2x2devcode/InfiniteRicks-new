@@ -18,3 +18,19 @@ dependencies {
     implementation("org.slf4j:slf4j-simple:2.0.16")
     implementation("com.google.code.gson:gson:2.11.0")
 }
+
+tasks.register<JavaExec>("runApi") {
+    group = "application"
+    description = "Run official JSON API on port 40002"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.infinitericks.wallet.server.RickServer")
+    standardInput = System.`in`
+}
+
+tasks.register<JavaExec>("runExplorer") {
+    group = "application"
+    description = "Run explorer JSON API on port 40051"
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.infinitericks.wallet.server.RickExplorerServer")
+    standardInput = System.`in`
+}

@@ -31,18 +31,27 @@ rpcallowip=127.0.0.1
 
 Inicie o daemon e aguarde sincronização.
 
-## 3. Subir a API oficial
+## 3. Subir API e explorer (mesmo servidor)
+
+Compile:
 
 ```bash
-export RICK_RPC_HOST=127.0.0.1
-export RICK_RPC_PORT=31648
-export RICK_RPC_USER=rickrpc
-export RICK_RPC_PASSWORD=<senha-forte>
-export PORT=8080
-./gradlew :rick-server:run
+bash scripts/build-server-services.sh
 ```
 
-Publique atrás de TLS em `https://server.infinitericks.com`.
+Inicie ambos (JSON apenas, sem interface web):
+
+```bash
+export RICK_RPC_PASSWORD=<senha-forte>
+bash scripts/run-server-services.sh
+```
+
+| Serviço | Porta | Endpoints |
+|---|---|---|
+| API oficial | `40002` | `/api/*` |
+| Explorer fallback | `40051` | `/ext/*` |
+
+Publique atrás de TLS em `https://server.infinitericks.com:40002` e `:40051`.
 
 ## 4. Gerar APK
 
@@ -84,4 +93,4 @@ STORE_PASS='sua-senha' KEY_PASS='sua-senha' bash scripts/generate-release-keysto
 
 ## 6. Publicar explorer fallback
 
-O endpoint `https://explorer2.infinitericks.com/ext/getsummary` deve estar acessível para fallback de rede.
+O endpoint `https://server.infinitericks.com:40051/ext/getsummary` deve estar acessível para fallback de rede. O explorer não possui interface web.

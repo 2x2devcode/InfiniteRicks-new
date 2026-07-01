@@ -8,63 +8,10 @@ import com.infinitericks.wallet.core.chain.NetworkParameters;
 import com.infinitericks.wallet.core.wallet.Amount;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
-
-final class RpcClient {
-    private static final Gson GSON = new Gson();
-    private final HttpClient httpClient;
-    private final URI rpcUri;
-    private final String authHeader;
-    private final AtomicLong idSequence = new AtomicLong(1);
-
-    RpcClient(String host, int port, String user, String password) {
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .build();
-        this.rpcUri = URI.create(String.format(Locale.US, "http://%s:%d/", host, port));
-        String token = Base64.getEncoder().encodeToString((user + ":" + password).getBytes(StandardCharsets.UTF_8));
-        this.authHeader = "Basic " + token;
-    }
-
-    JsonElement call(String method, JsonArray params) throws IOException {
-        JsonObject request = new JsonObject();
-        request.addProperty("jsonrpc", "1.0");
-        request.addProperty("id", idSequence.getAndIncrement());
-        request.addProperty("method", method);
-        request.add("params", params == null ? new JsonArray() : params);
-        try {
-            HttpRequest httpRequest = HttpRequest.newBuilder(rpcUri)
-                    .timeout(Duration.ofSeconds(30))
-                    .header("Authorization", authHeader)
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(request)))
-                    .build();
-            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IOException("RPC HTTP " + response.statusCode() + ": " + response.body());
-            }
-            JsonObject json = GSON.fromJson(response.body(), JsonObject.class);
-            if (json.has("error") && !json.get("error").isJsonNull()) {
-                throw new IOException(json.getAsJsonObject("error").toString());
-            }
-            return json.get("result");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("RPC interrupted", e);
-        }
-    }
-}
 
 final class RickApiService {
     private final RpcClient rpcClient;
@@ -148,16 +95,15 @@ final class RickApiService {
     }
 }
 
+/**
+ * JSON-only official API for the wallet app (no web UI).
+ * Endpoints under /api/*
+ */
 public final class RickServer {
     public static void main(String[] args) {
-        String host = env("RICK_RPC_HOST", "127.0.0.1");
-        int port = Integer.parseInt(env("RICK_RPC_PORT", String.valueOf(NetworkParameters.RPC_PORT)));
-        String user = env("RICK_RPC_USER", "rickrpc");
-        String password = env("RICK_RPC_PASSWORD", "rickrpc");
-        int listenPort = Integer.parseInt(env("PORT", "8080"));
-
-        RpcClient rpcClient = new RpcClient(host, port, user, password);
+        RpcClient rpcClient = RpcClientFactory.fromEnvironment();
         RickApiService service = new RickApiService(rpcClient);
+        int listenPort = Integer.parseInt(env("PORT", String.valueOf(NetworkParameters.OFFICIAL_API_PORT)));
 
         io.javalin.Javalin app = io.javalin.Javalin.create(config -> config.showJavalinBanner = false);
         app.get("/api/status", ctx -> ctx.json(service.status()));
@@ -173,6 +119,7 @@ public final class RickServer {
             service.invalidate(ctx.pathParam("address"));
             ctx.json(Map.of("ok", true));
         });
+        app.error(404, ctx -> ctx.status(404).json(Map.of("error", "not found")));
         app.start(listenPort);
     }
 
