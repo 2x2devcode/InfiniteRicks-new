@@ -68,6 +68,26 @@ public final class RickApiClient {
         }
     }
 
+    public void invalidateBalanceCache(String address) throws IOException {
+        IOException last = null;
+        String path = String.format(Locale.US, ApiEndpoints.CACHE_INVALIDATE, address);
+        RequestBody body = RequestBody.create("{}", JSON);
+        for (String baseUrl : baseUrls) {
+            Request request = new Request.Builder().url(baseUrl + path).post(body).build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    throw new IOException("HTTP " + response.code() + " for " + path);
+                }
+                return;
+            } catch (IOException e) {
+                last = e;
+            }
+        }
+        if (last != null) {
+            throw last;
+        }
+    }
+
     public List<Utxo> getUtxos(String address) throws IOException {
         JsonArray array = getJson(String.format(Locale.US, ApiEndpoints.ADDRESS_UTXOS, address), true)
                 .getAsJsonArray("utxos");

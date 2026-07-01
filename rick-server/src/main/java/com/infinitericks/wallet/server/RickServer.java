@@ -11,14 +11,14 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 final class RickApiService {
     private final RpcClient rpcClient;
-    private final Map<String, Long> balanceCache = new ConcurrentHashMap<>();
+    private final AddressQueryService addressQuery;
 
-    RickApiService(RpcClient rpcClient) {
+    RickApiService(RpcClient rpcClient, AddressQueryService addressQuery) {
         this.rpcClient = rpcClient;
+        this.addressQuery = addressQuery;
     }
 
     JsonObject status() throws IOException {
@@ -34,38 +34,11 @@ final class RickApiService {
     }
 
     JsonObject balance(String address) throws IOException {
-        if (balanceCache.containsKey(address)) {
-            return cachedBalance(address, balanceCache.get(address));
-        }
-        JsonArray params = new JsonArray();
-        params.add(address);
-        params.add(1);
-        double balance = rpcClient.call("getreceivedbyaddress", params).getAsDouble();
-        long satoshis = Amount.toSatoshis(String.format(Locale.US, "%.8f", balance));
-        balanceCache.put(address, satoshis);
-        return cachedBalance(address, satoshis);
+        return addressQuery.balance(address);
     }
 
     JsonObject utxos(String address) throws IOException {
-        JsonArray params = new JsonArray();
-        params.add(1);
-        params.add(9999999);
-        params.add(address);
-        JsonArray unspent = rpcClient.call("listunspent", params).getAsJsonArray();
-        JsonArray utxos = new JsonArray();
-        for (JsonElement element : unspent) {
-            JsonObject item = element.getAsJsonObject();
-            JsonObject utxo = new JsonObject();
-            utxo.addProperty("txid", item.get("txid").getAsString());
-            utxo.addProperty("vout", item.get("vout").getAsInt());
-            long satoshis = Amount.toSatoshis(String.format(Locale.US, "%.8f", item.get("amount").getAsDouble()));
-            utxo.addProperty("amountSatoshis", satoshis);
-            utxo.addProperty("confirmations", item.get("confirmations").getAsInt());
-            utxos.add(utxo);
-        }
-        JsonObject out = new JsonObject();
-        out.add("utxos", utxos);
-        return out;
+        return addressQuery.utxos(address);
     }
 
     JsonObject fee() {
@@ -84,14 +57,7 @@ final class RickApiService {
     }
 
     void invalidate(String address) {
-        balanceCache.remove(address);
-    }
-
-    private JsonObject cachedBalance(String address, long satoshis) {
-        JsonObject out = new JsonObject();
-        out.addProperty("balance", Amount.fromSatoshis(satoshis));
-        out.addProperty("address", address);
-        return out;
+        // Balance is derived from the chain indexer; nothing to invalidate per address.
     }
 }
 
@@ -100,9 +66,10 @@ final class RickApiService {
  * Endpoints under /api/*
  */
 public final class RickServer {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         RpcClient rpcClient = RpcClientFactory.fromEnvironment();
-        RickApiService service = new RickApiService(rpcClient);
+        AddressQueryService addressQuery = AddressQueryService.create(rpcClient);
+        RickApiService service = new RickApiService(rpcClient, addressQuery);
         int listenPort = Integer.parseInt(env("PORT", String.valueOf(NetworkParameters.OFFICIAL_API_PORT)));
         String bindHost = env("BIND_HOST", NetworkParameters.SERVER_BIND_HOST);
 

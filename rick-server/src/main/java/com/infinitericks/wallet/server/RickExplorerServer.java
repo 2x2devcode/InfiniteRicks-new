@@ -3,18 +3,17 @@ package com.infinitericks.wallet.server;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.infinitericks.wallet.core.chain.NetworkParameters;
-import com.infinitericks.wallet.core.wallet.Amount;
 
 import java.io.IOException;
-import java.util.Locale;
 
 /**
  * JSON-only explorer API for the wallet app (no web UI).
  * Endpoints: /ext/getsummary, /ext/getaddress/{address}
  */
 public final class RickExplorerServer {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         RpcClient rpcClient = RpcClientFactory.fromEnvironment();
+        AddressQueryService addressQuery = AddressQueryService.create(rpcClient);
         int listenPort = Integer.parseInt(env("EXPLORER_PORT", String.valueOf(NetworkParameters.EXPLORER_PORT)));
         String bindHost = env("BIND_HOST", NetworkParameters.SERVER_BIND_HOST);
 
@@ -32,7 +31,7 @@ public final class RickExplorerServer {
             }
         });
         app.get("/ext/getsummary", ServerSupport.rpc(() -> summary(rpcClient)));
-        app.get("/ext/getaddress/{address}", ctx -> JsonResponses.write(ctx, address(rpcClient, ctx.pathParam("address"))));
+        app.get("/ext/getaddress/{address}", ctx -> JsonResponses.write(ctx, address(addressQuery, ctx.pathParam("address"))));
         app.error(404, JsonResponses::notFound);
         app.start(bindHost, listenPort);
     }
@@ -46,13 +45,10 @@ public final class RickExplorerServer {
         return out;
     }
 
-    private static JsonObject address(RpcClient rpcClient, String address) throws IOException {
-        JsonArray params = new JsonArray();
-        params.add(address);
-        params.add(1);
-        double balance = rpcClient.call("getreceivedbyaddress", params).getAsDouble();
+    private static JsonObject address(AddressQueryService addressQuery, String address) throws IOException {
+        JsonObject balance = addressQuery.balance(address);
         JsonObject out = new JsonObject();
-        String formatted = Amount.fromSatoshis(Amount.toSatoshis(String.format(Locale.US, "%.8f", balance)));
+        String formatted = balance.get("balance").getAsString();
         out.addProperty("balance", formatted);
         out.addProperty("final_balance", formatted);
         return out;

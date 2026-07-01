@@ -79,6 +79,25 @@ public static final List<String> OFFICIAL_BASE_URLS = List.of(
 
 Explorer fallback: `NetworkParameters.EXPLORER_BASE_URL` (`serverexplorer.infinitericks.com`)
 
+## Indexador de saldo (servidor)
+
+A API nao usa mais `getreceivedbyaddress` / `listunspent` do daemon (esses RPCs so enxergam enderecos da carteira do no). O `rick-server` mantem um indexador on-chain em `~/.rick-wallet-index` (ou `INDEX_DIR`).
+
+| Variavel | Padrao | Descricao |
+|---|---|---|
+| `INDEX_DIR` | `~/.rick-wallet-index` | Pasta do indice persistido |
+| `INDEX_START_HEIGHT` | `0` | Bloco inicial da sincronizacao completa |
+| `INDEX_LOOKBACK_BLOCKS` | `5000` | Janela de varredura rapida para enderecos novos |
+
+Apos atualizar o servidor na VPS:
+
+```bash
+bash scripts/run-server-services.sh
+curl -s https://server.infinitericks.com/api/address/1AYqgJLpBzhyfejNNMJtyZ4QTcMmi8RU9g/balance
+```
+
+A primeira consulta pode levar alguns minutos enquanto o indice varre os blocos recentes; a sincronizacao completa continua em segundo plano.
+
 ## Endpoints REST esperados
 
 ### API oficial (`https://server.infinitericks.com` -> `127.0.0.1:40002`)

@@ -40,7 +40,7 @@ final class RpcClient {
         request.add("params", params == null ? new JsonArray() : params);
         try {
             HttpRequest httpRequest = HttpRequest.newBuilder(rpcUri)
-                    .timeout(Duration.ofSeconds(30))
+                    .timeout(Duration.ofSeconds(120))
                     .header("Authorization", authHeader)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(request)))

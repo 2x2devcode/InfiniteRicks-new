@@ -116,6 +116,11 @@ public final class WalletRepository {
     }
 
     public String refreshBalance(String address) throws Exception {
+        try {
+            apiClient.invalidateBalanceCache(address);
+        } catch (IOException ignored) {
+            // Server may not require explicit invalidation.
+        }
         return apiClient.getBalance(address);
     }
 
