@@ -22,4 +22,9 @@ final class JsonResponses {
         ctx.status(404);
         write(ctx, java.util.Map.of("error", "not found"));
     }
+
+    static void error(Context ctx, int status, String message) {
+        ctx.status(status);
+        write(ctx, java.util.Map.of("error", message));
+    }
 }

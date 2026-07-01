@@ -12,6 +12,11 @@ export RICK_RPC_PORT="${RICK_RPC_PORT:-31648}"
 export RICK_RPC_USER="${RICK_RPC_USER:-rickrpc}"
 export RICK_RPC_PASSWORD="${RICK_RPC_PASSWORD:-rickrpc}"
 
+if [[ "${RICK_RPC_PASSWORD}" == "rickrpc" ]]; then
+  echo "AVISO: RICK_RPC_PASSWORD usa o valor padrao 'rickrpc'."
+  echo "       Defina a senha real do daemon: export RICK_RPC_PASSWORD='...'"
+fi
+
 LIB_DIR="$ROOT_DIR/rick-server/build/install/rick-server/lib"
 if [[ ! -d "$LIB_DIR" ]]; then
   echo "Distribuicao nao encontrada. Compilando..."

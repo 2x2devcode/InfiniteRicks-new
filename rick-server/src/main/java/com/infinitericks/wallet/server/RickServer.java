@@ -22,14 +22,14 @@ final class RickApiService {
     }
 
     JsonObject status() throws IOException {
-        JsonObject info = rpcClient.call("getinfo", new JsonArray()).getAsJsonObject();
+        JsonObject info = RpcNodeInfo.getInfo(rpcClient);
         JsonObject out = new JsonObject();
         out.addProperty("online", true);
         out.addProperty("chain", "main");
-        out.addProperty("blocks", info.get("blocks").getAsLong());
-        out.addProperty("headers", info.has("headers") ? info.get("headers").getAsLong() : info.get("blocks").getAsLong());
+        out.addProperty("blocks", RpcNodeInfo.blocks(info));
+        out.addProperty("headers", RpcNodeInfo.headers(info));
         out.addProperty("progress", 100.0);
-        out.addProperty("peers", info.get("connections").getAsInt());
+        out.addProperty("peers", RpcNodeInfo.connections(info));
         return out;
     }
 
@@ -107,8 +107,17 @@ public final class RickServer {
         String bindHost = env("BIND_HOST", NetworkParameters.SERVER_BIND_HOST);
 
         io.javalin.Javalin app = io.javalin.Javalin.create(config -> config.showJavalinBanner = false);
-        app.get("/api/status", ctx -> JsonResponses.write(ctx, service.status()));
-        app.get("/api/fee", ctx -> JsonResponses.write(ctx, service.fee()));
+        ServerSupport.configureErrors(app);
+        app.get("/api/health", ctx -> {
+            try {
+                rpcClient.call("getblockcount", new JsonArray());
+                JsonResponses.write(ctx, java.util.Map.of("api", "ok", "rpc", "ok"));
+            } catch (IOException error) {
+                JsonResponses.error(ctx, 502, error.getMessage());
+            }
+        });
+        app.get("/api/status", ServerSupport.rpc(service::status));
+        app.get("/api/fee", ServerSupport.rpc(service::fee));
         app.get("/api/address/{address}/balance", ctx -> JsonResponses.write(ctx, service.balance(ctx.pathParam("address"))));
         app.get("/api/address/{address}/utxos", ctx -> JsonResponses.write(ctx, service.utxos(ctx.pathParam("address"))));
         app.get("/api/address/{address}/txs", ctx -> JsonResponses.write(ctx, Map.of("transactions", List.of())));

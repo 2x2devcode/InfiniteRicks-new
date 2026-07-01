@@ -19,24 +19,27 @@ public final class RickExplorerServer {
         String bindHost = env("BIND_HOST", NetworkParameters.SERVER_BIND_HOST);
 
         io.javalin.Javalin app = io.javalin.Javalin.create(config -> config.showJavalinBanner = false);
-        app.get("/ext/getsummary", ctx -> JsonResponses.write(ctx, summary(rpcClient)));
+        ServerSupport.configureErrors(app);
+        app.get("/ext/health", ctx -> {
+            try {
+                rpcClient.call("getblockcount", new JsonArray());
+                JsonResponses.write(ctx, java.util.Map.of("explorer", "ok", "rpc", "ok"));
+            } catch (IOException error) {
+                JsonResponses.error(ctx, 502, error.getMessage());
+            }
+        });
+        app.get("/ext/getsummary", ServerSupport.rpc(() -> summary(rpcClient)));
         app.get("/ext/getaddress/{address}", ctx -> JsonResponses.write(ctx, address(rpcClient, ctx.pathParam("address"))));
         app.error(404, JsonResponses::notFound);
         app.start(bindHost, listenPort);
     }
 
     private static JsonObject summary(RpcClient rpcClient) throws IOException {
-        JsonObject info = rpcClient.call("getinfo", new JsonArray()).getAsJsonObject();
+        JsonObject info = RpcNodeInfo.getInfo(rpcClient);
         JsonObject out = new JsonObject();
-        out.addProperty("blockcount", info.get("blocks").getAsLong());
-        if (info.has("moneysupply")) {
-            out.addProperty("supply", info.get("moneysupply").getAsString());
-        } else if (info.has("money_supply")) {
-            out.addProperty("supply", info.get("money_supply").getAsString());
-        } else {
-            out.addProperty("supply", "0");
-        }
-        out.addProperty("connections", info.get("connections").getAsInt());
+        out.addProperty("blockcount", RpcNodeInfo.blocks(info));
+        out.addProperty("supply", RpcNodeInfo.supply(info));
+        out.addProperty("connections", RpcNodeInfo.connections(info));
         return out;
     }
 

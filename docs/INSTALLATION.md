@@ -116,3 +116,30 @@ STORE_PASS='sua-senha' KEY_PASS='sua-senha' bash scripts/generate-release-keysto
 ## 6. Publicar explorer fallback
 
 O endpoint `https://serverexplorer.infinitericks.com/ext/getsummary` deve estar acessível para fallback de rede. O explorer não possui interface web.
+
+## 7. Diagnostico de erros
+
+Se `curl` publico retornar `Server Error` ou JSON `{"error":"..."}`:
+
+```bash
+export RICK_RPC_PASSWORD='<mesma-senha-do-InfiniteRicks.conf>'
+bash scripts/diagnose-server.sh
+```
+
+Causas comuns:
+
+| Sintoma | Causa |
+|---|---|
+| `RPC HTTP 401` | `RICK_RPC_USER` / `RICK_RPC_PASSWORD` diferentes do daemon |
+| `Connection refused` na porta 31648 | `infinitericksd` nao esta rodando ou `server=1` ausente |
+| `502` com mensagem RPC | API/explorer rodando, mas RPC inacessivel |
+| `Server Error` (texto puro) | Versao antiga sem tratamento JSON — atualize com `git pull` |
+
+Teste local antes do HTTPS:
+
+```bash
+curl -s http://127.0.0.1:40002/api/health
+curl -s http://127.0.0.1:40051/ext/health
+```
+
+O endpoint `https://serverexplorer.infinitericks.com/ext/getsummary` deve estar acessível para fallback de rede. O explorer não possui interface web.
