@@ -11,6 +11,7 @@ final class RpcClientFactory {
         int port = Integer.parseInt(env("RICK_RPC_PORT", String.valueOf(NetworkParameters.RPC_PORT)));
         String user = env("RICK_RPC_USER", "rickrpc");
         String password = env("RICK_RPC_PASSWORD", "rickrpc");
+        System.out.println("[rick-server] RPC target http://" + host + ":" + port + " user=" + user);
         return new RpcClient(host, port, user, password);
     }
 

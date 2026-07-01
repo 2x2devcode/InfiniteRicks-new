@@ -46,6 +46,9 @@ final class RpcClient {
                     .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(request)))
                     .build();
             HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 401) {
+                throw new IOException("RPC unauthorized (401): rpcuser/rpcpassword invalid — check ~/.InfiniteRicks/InfiniteRicks.conf and restart infinitericksd");
+            }
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new IOException("RPC HTTP " + response.statusCode() + ": " + response.body());
             }

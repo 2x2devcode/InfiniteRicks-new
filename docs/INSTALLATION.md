@@ -29,7 +29,15 @@ rpcport=31648
 rpcallowip=127.0.0.1
 ```
 
-Inicie o daemon e aguarde sincronização.
+Inicie o daemon e aguarde sincronização. **Após alterar `rpcuser`/`rpcpassword`, reinicie o daemon:**
+
+```bash
+infinitericksd stop
+sleep 2
+infinitericksd -daemon
+```
+
+Os scripts `run-server-services.sh` e `diagnose-server.sh` leem automaticamente `rpcuser` e `rpcpassword` desse arquivo.
 
 ## 3. Subir API e explorer (mesmo servidor)
 
@@ -122,9 +130,11 @@ O endpoint `https://serverexplorer.infinitericks.com/ext/getsummary` deve estar 
 Se `curl` publico retornar `Server Error` ou JSON `{"error":"..."}`:
 
 ```bash
-export RICK_RPC_PASSWORD='<mesma-senha-do-InfiniteRicks.conf>'
 bash scripts/diagnose-server.sh
+bash scripts/run-server-services.sh
 ```
+
+`run-server-services.sh` carrega credenciais de `~/.InfiniteRicks/InfiniteRicks.conf` automaticamente.
 
 Causas comuns:
 
@@ -142,4 +152,3 @@ curl -s http://127.0.0.1:40002/api/health
 curl -s http://127.0.0.1:40051/ext/health
 ```
 
-O endpoint `https://serverexplorer.infinitericks.com/ext/getsummary` deve estar acessível para fallback de rede. O explorer não possui interface web.

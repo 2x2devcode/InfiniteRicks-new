@@ -2,6 +2,7 @@ package com.infinitericks.wallet.server;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import io.javalin.http.Context;
 
 final class JsonResponses {
@@ -24,7 +25,19 @@ final class JsonResponses {
     }
 
     static void error(Context ctx, int status, String message) {
+        JsonObject out = new JsonObject();
+        out.addProperty("error", message == null || message.isBlank() ? "unknown error" : sanitize(message));
         ctx.status(status);
-        write(ctx, java.util.Map.of("error", message));
+        write(ctx, out);
+    }
+
+    private static String sanitize(String message) {
+        if (message.contains("<HTML") || message.contains("<html")) {
+            return "upstream error (see server logs)";
+        }
+        if (message.length() > 500) {
+            return message.substring(0, 500) + "...";
+        }
+        return message;
     }
 }
