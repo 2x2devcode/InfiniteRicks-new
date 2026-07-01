@@ -7,7 +7,6 @@ import com.infinitericks.wallet.core.wallet.Amount;
 
 import java.io.IOException;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * JSON-only explorer API for the wallet app (no web UI).
@@ -20,9 +19,9 @@ public final class RickExplorerServer {
         String bindHost = env("BIND_HOST", NetworkParameters.SERVER_BIND_HOST);
 
         io.javalin.Javalin app = io.javalin.Javalin.create(config -> config.showJavalinBanner = false);
-        app.get("/ext/getsummary", ctx -> ctx.json(summary(rpcClient)));
-        app.get("/ext/getaddress/{address}", ctx -> ctx.json(address(rpcClient, ctx.pathParam("address"))));
-        app.error(404, ctx -> ctx.status(404).json(Map.of("error", "not found")));
+        app.get("/ext/getsummary", ctx -> JsonResponses.write(ctx, summary(rpcClient)));
+        app.get("/ext/getaddress/{address}", ctx -> JsonResponses.write(ctx, address(rpcClient, ctx.pathParam("address"))));
+        app.error(404, JsonResponses::notFound);
         app.start(bindHost, listenPort);
     }
 

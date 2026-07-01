@@ -12,6 +12,12 @@ export RICK_RPC_PORT="${RICK_RPC_PORT:-31648}"
 export RICK_RPC_USER="${RICK_RPC_USER:-rickrpc}"
 export RICK_RPC_PASSWORD="${RICK_RPC_PASSWORD:-rickrpc}"
 
+LIB_DIR="$ROOT_DIR/rick-server/build/install/rick-server/lib"
+if [[ ! -d "$LIB_DIR" ]]; then
+  echo "Distribuicao nao encontrada. Compilando..."
+  ./gradlew :rick-server:installDist -q
+fi
+
 cleanup() {
   if [[ -n "${API_PID:-}" ]]; then
     kill "$API_PID" 2>/dev/null || true
@@ -28,13 +34,14 @@ echo "  Explorer: ${BIND_HOST}:${EXPLORER_PORT}  -> https://serverexplorer.infin
 echo "  RPC:      ${RICK_RPC_HOST}:${RICK_RPC_PORT}"
 
 export BIND_HOST
-PORT="$API_PORT" ./gradlew :rick-server:runApi --quiet &
+PORT="$API_PORT" java -cp "$LIB_DIR/*" com.infinitericks.wallet.server.RickServer &
 API_PID=$!
 
-EXPLORER_PORT="$EXPLORER_PORT" ./gradlew :rick-server:runExplorer --quiet &
+EXPLORER_PORT="$EXPLORER_PORT" java -cp "$LIB_DIR/*" com.infinitericks.wallet.server.RickExplorerServer &
 EXPLORER_PID=$!
 
 echo "API PID ${API_PID}, Explorer PID ${EXPLORER_PID}"
+echo "Teste local: curl -s http://${BIND_HOST}:${API_PORT}/api/status"
 echo "Pressione Ctrl+C para encerrar."
 
 wait

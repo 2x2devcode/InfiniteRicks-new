@@ -107,20 +107,20 @@ public final class RickServer {
         String bindHost = env("BIND_HOST", NetworkParameters.SERVER_BIND_HOST);
 
         io.javalin.Javalin app = io.javalin.Javalin.create(config -> config.showJavalinBanner = false);
-        app.get("/api/status", ctx -> ctx.json(service.status()));
-        app.get("/api/fee", ctx -> ctx.json(service.fee()));
-        app.get("/api/address/{address}/balance", ctx -> ctx.json(service.balance(ctx.pathParam("address"))));
-        app.get("/api/address/{address}/utxos", ctx -> ctx.json(service.utxos(ctx.pathParam("address"))));
-        app.get("/api/address/{address}/txs", ctx -> ctx.json(Map.of("transactions", List.of())));
+        app.get("/api/status", ctx -> JsonResponses.write(ctx, service.status()));
+        app.get("/api/fee", ctx -> JsonResponses.write(ctx, service.fee()));
+        app.get("/api/address/{address}/balance", ctx -> JsonResponses.write(ctx, service.balance(ctx.pathParam("address"))));
+        app.get("/api/address/{address}/utxos", ctx -> JsonResponses.write(ctx, service.utxos(ctx.pathParam("address"))));
+        app.get("/api/address/{address}/txs", ctx -> JsonResponses.write(ctx, Map.of("transactions", List.of())));
         app.post("/api/tx/broadcast", ctx -> {
             JsonObject body = new Gson().fromJson(ctx.body(), JsonObject.class);
-            ctx.json(service.broadcast(body.get("rawTx").getAsString()));
+            JsonResponses.write(ctx, service.broadcast(body.get("rawTx").getAsString()));
         });
         app.post("/api/cache/invalidate/{address}", ctx -> {
             service.invalidate(ctx.pathParam("address"));
-            ctx.json(Map.of("ok", true));
+            JsonResponses.write(ctx, Map.of("ok", true));
         });
-        app.error(404, ctx -> ctx.status(404).json(Map.of("error", "not found")));
+        app.error(404, JsonResponses::notFound);
         app.start(bindHost, listenPort);
     }
 

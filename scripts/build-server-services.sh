@@ -9,7 +9,7 @@ API_PORT="${API_PORT:-40002}"
 EXPLORER_PORT="${EXPLORER_PORT:-40051}"
 
 echo "Compilando API e explorer (bind local ${BIND_HOST})..."
-./gradlew :rick-server:build
+./gradlew :rick-server:installDist
 
 echo ""
 echo "Build concluido."
