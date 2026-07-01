@@ -11,11 +11,25 @@ std::string xorCombine(const std::vector<unsigned char>& data, const std::vector
     }
     return out;
 }
+
+const std::vector<unsigned char>& xorPad() {
+    static const std::vector<unsigned char> pad = {0x21, 0x3e, 0x5f, 0x76, 0x12, 0x4d, 0x08, 0x37};
+    return pad;
+}
+
+jobjectArray makePinArray(JNIEnv* env, const std::string& pin) {
+    jclass stringClass = env->FindClass("java/lang/String");
+    jobjectArray array = env->NewObjectArray(1, stringClass, nullptr);
+    jstring value = env->NewStringUTF(pin.c_str());
+    env->SetObjectArrayElement(array, 0, value);
+    env->DeleteLocalRef(value);
+    return array;
+}
 }
 
 extern "C"
 JNIEXPORT jobjectArray JNICALL
-Java_com_infinitericks_wallet_security_NativePinProvider_getPinnedHashes(
+Java_com_infinitericks_wallet_security_NativePinProvider_getApiPinnedHashes(
         JNIEnv* env,
         jobject /* thiz */) {
   const std::vector<unsigned char> data = {
@@ -25,13 +39,20 @@ Java_com_infinitericks_wallet_security_NativePinProvider_getPinnedHashes(
       0x24, 0x28, 0x3a, 0x55, 0x45, 0x0d, 0x6b, 0x14, 0x70, 0x7a, 0x6b, 0x00,
       0x19, 0x0d, 0x3e, 0x4f, 0x27, 0x7a, 0x39, 0x0f, 0x14, 0x08, 0x3d, 0x14,
       0x2b, 0x78, 0x6e, 0x51};
-  const std::vector<unsigned char> pad = {0x21, 0x3e, 0x5f, 0x76, 0x12, 0x4d, 0x08, 0x37};
-  std::string pin = xorCombine(data, pad);
+  return makePinArray(env, xorCombine(data, xorPad()));
+}
 
-  jclass stringClass = env->FindClass("java/lang/String");
-  jobjectArray array = env->NewObjectArray(1, stringClass, nullptr);
-  jstring value = env->NewStringUTF(pin.c_str());
-  env->SetObjectArrayElement(array, 0, value);
-  env->DeleteLocalRef(value);
-  return array;
+extern "C"
+JNIEXPORT jobjectArray JNICALL
+Java_com_infinitericks_wallet_security_NativePinProvider_getExplorerPinnedHashes(
+        JNIEnv* env,
+        jobject /* thiz */) {
+  const std::vector<unsigned char> data = {
+      0x45, 0x5f, 0x3d, 0x13, 0x22, 0x2c, 0x39, 0x0f, 0x42, 0x0a, 0x6b, 0x4f,
+      0x2b, 0x7d, 0x6b, 0x02, 0x42, 0x5d, 0x6d, 0x45, 0x73, 0x28, 0x30, 0x03,
+      0x18, 0x07, 0x3e, 0x45, 0x71, 0x29, 0x3c, 0x53, 0x13, 0x5a, 0x6f, 0x4e,
+      0x20, 0x74, 0x69, 0x56, 0x16, 0x0b, 0x3d, 0x13, 0x23, 0x78, 0x3c, 0x0e,
+      0x42, 0x5f, 0x3d, 0x46, 0x20, 0x78, 0x3a, 0x07, 0x14, 0x0e, 0x6c, 0x17,
+      0x74, 0x75, 0x3b, 0x56};
+  return makePinArray(env, xorCombine(data, xorPad()));
 }

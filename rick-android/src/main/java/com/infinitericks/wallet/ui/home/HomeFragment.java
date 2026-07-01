@@ -1,6 +1,7 @@
 package com.infinitericks.wallet.ui.home;
 
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,6 +20,8 @@ import com.infinitericks.wallet.data.WalletRepository;
 import com.infinitericks.wallet.ui.MainActivity;
 
 public final class HomeFragment extends Fragment {
+    private static final String TAG = "RickWallet";
+
     private TextView balanceValue;
     private TextView networkStatus;
 
@@ -41,8 +44,8 @@ public final class HomeFragment extends Fragment {
         WalletRepository repository = ((MainActivity) requireActivity()).repository();
         repository.activeAccount().ifPresentOrElse(account -> repository.runIo(() -> {
             try {
-                String balance = repository.refreshBalance(account.address());
                 RickApiClient.NetworkStatus status = repository.refreshNetworkStatus();
+                String balance = repository.refreshBalance(account.address());
                 requireActivity().runOnUiThread(() -> {
                     balanceValue.setText(balance + " " + NetworkParameters.TICKER);
                     networkStatus.setText(
@@ -51,9 +54,11 @@ public final class HomeFragment extends Fragment {
                     );
                 });
             } catch (Exception e) {
+                Log.e(TAG, "refresh failed", e);
+                String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
                 requireActivity().runOnUiThread(() -> {
                     networkStatus.setText("Rede indisponível. Verifique API e explorer.");
-                    Toast.makeText(requireContext(), e.getMessage(), Toast.LENGTH_LONG).show();
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
                 });
             }
         }), () -> balanceValue.setText("Sem conta ativa"));

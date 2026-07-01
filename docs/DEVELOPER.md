@@ -21,6 +21,13 @@ Testes cobrem:
 
 ## Atualizar certificate pin
 
+Pins atuais (mar/2026):
+
+| Host | SHA-256 pin |
+|---|---|
+| `server.infinitericks.com` | `9b4f332fd9687204011bc49c837eead6c0836e2bd34bb7c783a9571856bb95ff` |
+| `serverexplorer.infinitericks.com` | `dabe0a18c44990c5cc23ae8499a3cd4d2d0829aa75be1549cab02520503af83a` |
+
 1. Obtenha o SHA-256 da chave pública TLS:
 
 ```bash
@@ -30,8 +37,32 @@ echo | openssl s_client -connect server.infinitericks.com:443 -servername server
   | openssl dgst -sha256 -hex
 ```
 
-2. Gere bytes XOR para `rick-android/src/main/cpp/pin_config.cpp`
+2. Gere bytes XOR para `rick-android/src/main/cpp/pin_config.cpp` (`getApiPinnedHashes` / `getExplorerPinnedHashes`)
 3. Recompile o APK
+
+## Depurar o app Android (adb logcat)
+
+Linux / macOS:
+
+```bash
+adb logcat -s RickWallet:E OkHttp:W AndroidRuntime:E
+adb logcat *:E | grep -iE 'RickWallet|infinitericks|certificate|pin mismatch|SSL'
+```
+
+Windows (PowerShell / CMD):
+
+```bat
+adb logcat -s RickWallet:E OkHttp:W AndroidRuntime:E
+adb logcat *:E | findstr /I "RickWallet infinitericks certificate pin SSL"
+```
+
+Erros comuns no log:
+
+| Mensagem | Causa |
+|---|---|
+| `certificate pin mismatch` | Certificado TLS mudou — atualize `pin_config.cpp` |
+| `HTTP 4xx/5xx` | API/explorer retornando erro |
+| `Unable to resolve host` | DNS ou URL errada no APK antigo |
 
 ## Adicionar servidor de failover
 

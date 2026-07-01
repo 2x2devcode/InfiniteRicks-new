@@ -11,7 +11,8 @@ public final class NativePinProvider implements PinProvider {
         System.loadLibrary("rickpin");
     }
 
-    private native String[] getPinnedHashes();
+    private native String[] getApiPinnedHashes();
+    private native String[] getExplorerPinnedHashes();
 
     @Override
     public String host() {
@@ -19,10 +20,17 @@ public final class NativePinProvider implements PinProvider {
     }
 
     @Override
+    public List<String> pinnedHosts() {
+        return List.of(NetworkParameters.OFFICIAL_API_HOST, NetworkParameters.EXPLORER_HOST);
+    }
+
+    @Override
     public List<String> pinsForHost(String host) {
-        if (NetworkParameters.OFFICIAL_API_HOST.equalsIgnoreCase(host)
-                || NetworkParameters.EXPLORER_HOST.equalsIgnoreCase(host)) {
-            return Arrays.asList(getPinnedHashes());
+        if (NetworkParameters.OFFICIAL_API_HOST.equalsIgnoreCase(host)) {
+            return Arrays.asList(getApiPinnedHashes());
+        }
+        if (NetworkParameters.EXPLORER_HOST.equalsIgnoreCase(host)) {
+            return Arrays.asList(getExplorerPinnedHashes());
         }
         return List.of();
     }
