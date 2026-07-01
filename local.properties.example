@@ -1,0 +1,9 @@
+# Copie para local.properties (gitignored) ou defina ANDROID_HOME antes do build.
+#
+# Linux / macOS (Android Studio):
+#   sdk.dir=/home/USER/Android/Sdk
+#
+# Windows:
+#   sdk.dir=C\:\\Users\\USER\\AppData\\Local\\Android\\Sdk
+#
+sdk.dir=/path/to/Android/Sdk

@@ -12,6 +12,8 @@ Todos os módulos dependem desta classe — não duplique constantes.
 ./gradlew :rick-core:test
 ```
 
+Nao e necessario Android SDK para os testes do `rick-core`. O modulo `:rick-android` so e incluido quando `ANDROID_HOME` ou `local.properties` apontam para um SDK valido; caso contrario, `./gradlew :rick-core:test` roda normalmente.
+
 Testes cobrem:
 - vetores Base58 do repositório oficial
 - round-trip WIF comprimida

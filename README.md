@@ -43,12 +43,22 @@ Fonte: [InfiniteRicks oficial](https://github.com/2x2devcode/InfiniteRicks)
 
 ## Build rápido
 
+Testes e servidor **nao exigem** Android SDK:
+
 ```bash
 ./gradlew :rick-core:test
 ./gradlew :rick-server:build
+```
+
+APK Android (exige SDK API 35):
+
+```bash
+export ANDROID_HOME=$HOME/Android/Sdk   # ou bash scripts/setup-android-sdk.sh
 bash scripts/generate-release-keystore.sh   # primeira vez
 ./gradlew :rick-android:assembleRelease
 ```
+
+Se o SDK nao estiver configurado, o modulo `:rick-android` e omitido automaticamente e os comandos acima (exceto `assembleRelease`) continuam funcionando.
 
 ## Documentação
 

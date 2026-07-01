@@ -4,16 +4,18 @@
 
 - Ubuntu 22.04+
 - JDK 17+
-- Android SDK 35
+- Android SDK 35 (somente para `:rick-android`)
 - InfiniteRicks daemon (`infinitericksd`) para o servidor API
 
 ## 1. Clonar e compilar
 
 ```bash
-git clone <repo>
-cd infinite-ricks-wallet
+git clone https://github.com/2x2devcode/InfiniteRicks-new.git
+cd InfiniteRicks-new
 ./gradlew :rick-core:test :rick-api:build :rick-server:build
 ```
+
+> **Nota:** `:rick-core:test` funciona sem Android SDK. O modulo `:rick-android` so entra no build quando `local.properties` ou `ANDROID_HOME` apontam para um SDK valido.
 
 ## 2. Configurar o daemon InfiniteRicks
 
@@ -44,9 +46,23 @@ Publique atrás de TLS em `https://server.infinitericks.com`.
 
 ## 4. Gerar APK
 
+Configure o SDK (uma das opcoes):
+
 ```bash
-export ANDROID_HOME=/path/to/android-sdk
-echo "sdk.dir=$ANDROID_HOME" > local.properties
+# Opcao A: variavel de ambiente (local.properties e gerado automaticamente)
+export ANDROID_HOME=$HOME/Android/Sdk
+
+# Opcao B: script auxiliar
+bash scripts/setup-android-sdk.sh
+
+# Opcao C: arquivo manual
+cp local.properties.example local.properties
+# edite sdk.dir no arquivo
+```
+
+Depois compile:
+
+```bash
 ./gradlew :rick-android:assembleRelease
 ```
 
