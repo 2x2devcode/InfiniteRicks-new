@@ -21,6 +21,8 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 public final class RickHttpClientFactory {
+    private static final ThreadLocal<String> REQUEST_HOST = new ThreadLocal<>();
+
     private RickHttpClientFactory() {
     }
 
@@ -46,11 +48,23 @@ public final class RickHttpClientFactory {
                     .callTimeout(readTimeout.plusSeconds(5).toMillis(), TimeUnit.MILLISECONDS)
                     .retryOnConnectionFailure(true)
                     .sslSocketFactory(socketFactory, trustManager)
+                    .addInterceptor(hostCaptureInterceptor())
                     .addInterceptor(userAgentInterceptor(userAgent))
                     .build();
         } catch (Exception e) {
             throw new IllegalStateException("failed to create HTTP client", e);
         }
+    }
+
+    private static Interceptor hostCaptureInterceptor() {
+        return chain -> {
+            REQUEST_HOST.set(chain.request().url().host());
+            try {
+                return chain.proceed(chain.request());
+            } finally {
+                REQUEST_HOST.remove();
+            }
+        };
     }
 
     private static Interceptor userAgentInterceptor(String userAgent) {
@@ -79,7 +93,11 @@ public final class RickHttpClientFactory {
                     throw new java.security.cert.CertificateException("empty certificate chain");
                 }
                 String actual = CertificatePin.sha256Hex(chain[0].getPublicKey().getEncoded());
-                List<String> allowed = pinProvider.pinsForHost(pinProvider.host());
+                String host = REQUEST_HOST.get();
+                if (host == null || host.isBlank()) {
+                    host = pinProvider.host();
+                }
+                List<String> allowed = pinProvider.pinsForHost(host);
                 boolean matched = false;
                 for (String pin : allowed) {
                     if (pin.equalsIgnoreCase(actual)) {
@@ -89,7 +107,7 @@ public final class RickHttpClientFactory {
                 }
                 if (!matched) {
                     throw new java.security.cert.CertificateException(
-                            "certificate pin mismatch for " + pinProvider.host() + ": " + actual
+                            "certificate pin mismatch for " + host + ": " + actual
                     );
                 }
             }

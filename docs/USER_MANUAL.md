@@ -55,7 +55,7 @@ A sessão é bloqueada automaticamente quando o app vai para segundo plano.
 
 ## Suporte de rede
 
-- API principal: `server.infinitericks.com:40002`
-- Explorer de fallback: `server.infinitericks.com:40051`
+- API principal: `https://server.infinitericks.com`
+- Explorer de fallback: `https://serverexplorer.infinitericks.com`
 
 Se a API estiver indisponível, o saldo pode demorar a atualizar até o fallback responder.

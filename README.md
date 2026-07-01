@@ -8,7 +8,7 @@ Carteira Android não-custodial para a criptomoeda **InfiniteRicks (RICK)**.
 |---|---|
 | `rick-core` | Parâmetros da rede, criptografia, transações e armazenamento da carteira |
 | `rick-api` | Cliente HTTP com TLS, retry, failover e certificate pinning |
-| `rick-server` | API REST JSON (`:40002`) e explorer JSON (`:40051`) para `server.infinitericks.com` |
+| `rick-server` | API JSON em `127.0.0.1:40002` e explorer em `127.0.0.1:40051` (proxy HTTPS) |
 | `rick-android` | Aplicativo Android 15+ |
 
 ## Parâmetros da rede (mainnet)
@@ -28,7 +28,7 @@ Fonte: [InfiniteRicks oficial](https://github.com/2x2devcode/InfiniteRicks)
 - Desbloqueio biométrico (impressão digital / face) com Android Keystore
 - QR code para receber e escanear endereços ao enviar
 - Restauração de carteira via WIF na aba Receber
-- Fallback automático para explorer JSON na porta `40051` quando a API (`40002`) falha
+- Fallback automático para `https://serverexplorer.infinitericks.com` quando a API falha
 - Bloqueio automático da sessão ao sair do app
 
 ## Segurança
@@ -83,5 +83,6 @@ RSA 2048
 
 - Não há REST API nativa (somente JSON-RPC)
 - Não há URL oficial de bootstrap no código
-- API (`server.infinitericks.com:40002`) e explorer (`:40051`) devem estar publicados em produção
+- API pública `https://server.infinitericks.com` (processo local `127.0.0.1:40002`)
+- Explorer `https://serverexplorer.infinitericks.com` (processo local `127.0.0.1:40051`)
 - Ambos os serviços são somente JSON — sem interface web

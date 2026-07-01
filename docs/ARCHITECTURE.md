@@ -16,8 +16,8 @@ flowchart TB
     end
 
     subgraph Remote
-        Server["server.infinitericks.com:40002"]
-        Explorer["server.infinitericks.com:40051"]
+        Server[server.infinitericks.com]
+        Explorer[serverexplorer.infinitericks.com]
     end
 
   UI --> Repo
@@ -48,10 +48,10 @@ Cliente HTTP com:
 ### `rick-server`
 Dois processos JSON (sem interface web) no mesmo servidor:
 
-| Classe | Porta | Rotas |
-|---|---|---|
-| `RickServer` | 40002 | `/api/status`, `/api/address/...`, `/api/tx/broadcast` |
-| `RickExplorerServer` | 40051 | `/ext/getsummary`, `/ext/getaddress/{addr}` |
+| Classe | Bind VPS | URL pública | Rotas |
+|---|---|---|---|
+| `RickServer` | `127.0.0.1:40002` | `https://server.infinitericks.com` | `/api/*` |
+| `RickExplorerServer` | `127.0.0.1:40051` | `https://serverexplorer.infinitericks.com` | `/ext/*` |
 
 Scripts: `scripts/build-server-services.sh`, `scripts/run-server-services.sh`
 

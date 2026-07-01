@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
+BIND_HOST="${BIND_HOST:-127.0.0.1}"
 API_PORT="${API_PORT:-40002}"
 EXPLORER_PORT="${EXPLORER_PORT:-40051}"
 export RICK_RPC_HOST="${RICK_RPC_HOST:-127.0.0.1}"
@@ -21,11 +22,12 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "Iniciando servicos JSON (sem interface web)..."
-echo "  API:      :${API_PORT}"
-echo "  Explorer: :${EXPLORER_PORT}"
+echo "Iniciando servicos JSON em ${BIND_HOST} (sem interface web)..."
+echo "  API:      ${BIND_HOST}:${API_PORT}  -> https://server.infinitericks.com"
+echo "  Explorer: ${BIND_HOST}:${EXPLORER_PORT}  -> https://serverexplorer.infinitericks.com"
 echo "  RPC:      ${RICK_RPC_HOST}:${RICK_RPC_PORT}"
 
+export BIND_HOST
 PORT="$API_PORT" ./gradlew :rick-server:runApi --quiet &
 API_PID=$!
 

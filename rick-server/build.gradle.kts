@@ -21,7 +21,7 @@ dependencies {
 
 tasks.register<JavaExec>("runApi") {
     group = "application"
-    description = "Run official JSON API on port 40002"
+    description = "Run official JSON API on 127.0.0.1:40002"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.infinitericks.wallet.server.RickServer")
     standardInput = System.`in`
@@ -29,7 +29,7 @@ tasks.register<JavaExec>("runApi") {
 
 tasks.register<JavaExec>("runExplorer") {
     group = "application"
-    description = "Run explorer JSON API on port 40051"
+    description = "Run explorer JSON API on 127.0.0.1:40051"
     classpath = sourceSets["main"].runtimeClasspath
     mainClass.set("com.infinitericks.wallet.server.RickExplorerServer")
     standardInput = System.`in`

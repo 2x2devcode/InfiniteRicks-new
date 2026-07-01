@@ -46,12 +46,34 @@ export RICK_RPC_PASSWORD=<senha-forte>
 bash scripts/run-server-services.sh
 ```
 
-| Serviço | Porta | Endpoints |
-|---|---|---|
-| API oficial | `40002` | `/api/*` |
-| Explorer fallback | `40051` | `/ext/*` |
+| Serviço | URL pública | Bind local (VPS) | Endpoints |
+|---|---|---|---|
+| API oficial | `https://server.infinitericks.com` | `127.0.0.1:40002` | `/api/*` |
+| Explorer fallback | `https://serverexplorer.infinitericks.com` | `127.0.0.1:40051` | `/ext/*` |
 
-Publique atrás de TLS em `https://server.infinitericks.com:40002` e `:40051`.
+Exemplo nginx (API):
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name server.infinitericks.com;
+    location / {
+        proxy_pass http://127.0.0.1:40002;
+    }
+}
+```
+
+Exemplo nginx (explorer):
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name serverexplorer.infinitericks.com;
+    location / {
+        proxy_pass http://127.0.0.1:40051;
+    }
+}
+```
 
 ## 4. Gerar APK
 
@@ -93,4 +115,4 @@ STORE_PASS='sua-senha' KEY_PASS='sua-senha' bash scripts/generate-release-keysto
 
 ## 6. Publicar explorer fallback
 
-O endpoint `https://server.infinitericks.com:40051/ext/getsummary` deve estar acessível para fallback de rede. O explorer não possui interface web.
+O endpoint `https://serverexplorer.infinitericks.com/ext/getsummary` deve estar acessível para fallback de rede. O explorer não possui interface web.

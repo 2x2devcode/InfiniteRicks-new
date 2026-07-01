@@ -24,7 +24,7 @@ Testes cobrem:
 1. Obtenha o SHA-256 da chave pública TLS:
 
 ```bash
-echo | openssl s_client -connect server.infinitericks.com:40002 -servername server.infinitericks.com 2>/dev/null \
+echo | openssl s_client -connect server.infinitericks.com:443 -servername server.infinitericks.com 2>/dev/null \
   | openssl x509 -pubkey -noout \
   | openssl pkey -pubin -outform der \
   | openssl dgst -sha256 -hex
@@ -35,20 +35,20 @@ echo | openssl s_client -connect server.infinitericks.com:40002 -servername serv
 
 ## Adicionar servidor de failover
 
-Em `ApiEndpoints.OFFICIAL_BASE_URLS`, inclua URLs adicionais com porta `40002`:
+Em `ApiEndpoints.OFFICIAL_BASE_URLS`, inclua URLs adicionais:
 
 ```java
 public static final List<String> OFFICIAL_BASE_URLS = List.of(
     NetworkParameters.OFFICIAL_API_BASE_URL,
-    "https://server2.infinitericks.com:40002"
+    "https://server2.infinitericks.com"
 );
 ```
 
-Explorer fallback (porta `40051`, mesmo host): `NetworkParameters.EXPLORER_BASE_URL`
+Explorer fallback: `NetworkParameters.EXPLORER_BASE_URL` (`serverexplorer.infinitericks.com`)
 
 ## Endpoints REST esperados
 
-### API oficial (porta 40002)
+### API oficial (`https://server.infinitericks.com` -> `127.0.0.1:40002`)
 
 | Método | Path |
 |---|---|
@@ -60,7 +60,7 @@ Explorer fallback (porta `40051`, mesmo host): `NetworkParameters.EXPLORER_BASE_
 | POST | `/api/tx/broadcast` |
 | POST | `/api/cache/invalidate/{addr}` |
 
-### Explorer JSON (porta 40051, sem interface web)
+### Explorer JSON (`https://serverexplorer.infinitericks.com` -> `127.0.0.1:40051`, sem interface web)
 
 | Método | Path |
 |---|---|

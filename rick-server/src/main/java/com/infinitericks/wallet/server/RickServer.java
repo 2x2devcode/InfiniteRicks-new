@@ -104,6 +104,7 @@ public final class RickServer {
         RpcClient rpcClient = RpcClientFactory.fromEnvironment();
         RickApiService service = new RickApiService(rpcClient);
         int listenPort = Integer.parseInt(env("PORT", String.valueOf(NetworkParameters.OFFICIAL_API_PORT)));
+        String bindHost = env("BIND_HOST", NetworkParameters.SERVER_BIND_HOST);
 
         io.javalin.Javalin app = io.javalin.Javalin.create(config -> config.showJavalinBanner = false);
         app.get("/api/status", ctx -> ctx.json(service.status()));
@@ -120,7 +121,7 @@ public final class RickServer {
             ctx.json(Map.of("ok", true));
         });
         app.error(404, ctx -> ctx.status(404).json(Map.of("error", "not found")));
-        app.start(listenPort);
+        app.start(bindHost, listenPort);
     }
 
     private static String env(String key, String fallback) {

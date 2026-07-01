@@ -20,9 +20,10 @@ public final class NativePinProvider implements PinProvider {
 
     @Override
     public List<String> pinsForHost(String host) {
-        if (!NetworkParameters.OFFICIAL_API_HOST.equalsIgnoreCase(host)) {
-            return List.of();
+        if (NetworkParameters.OFFICIAL_API_HOST.equalsIgnoreCase(host)
+                || NetworkParameters.EXPLORER_HOST.equalsIgnoreCase(host)) {
+            return Arrays.asList(getPinnedHashes());
         }
-        return Arrays.asList(getPinnedHashes());
+        return List.of();
     }
 }

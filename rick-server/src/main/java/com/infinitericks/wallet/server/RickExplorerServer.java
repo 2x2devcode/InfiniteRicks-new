@@ -17,12 +17,13 @@ public final class RickExplorerServer {
     public static void main(String[] args) {
         RpcClient rpcClient = RpcClientFactory.fromEnvironment();
         int listenPort = Integer.parseInt(env("EXPLORER_PORT", String.valueOf(NetworkParameters.EXPLORER_PORT)));
+        String bindHost = env("BIND_HOST", NetworkParameters.SERVER_BIND_HOST);
 
         io.javalin.Javalin app = io.javalin.Javalin.create(config -> config.showJavalinBanner = false);
         app.get("/ext/getsummary", ctx -> ctx.json(summary(rpcClient)));
         app.get("/ext/getaddress/{address}", ctx -> ctx.json(address(rpcClient, ctx.pathParam("address"))));
         app.error(404, ctx -> ctx.status(404).json(Map.of("error", "not found")));
-        app.start(listenPort);
+        app.start(bindHost, listenPort);
     }
 
     private static JsonObject summary(RpcClient rpcClient) throws IOException {

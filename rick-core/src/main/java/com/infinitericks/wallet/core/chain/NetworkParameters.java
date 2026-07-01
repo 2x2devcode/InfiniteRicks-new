@@ -29,10 +29,13 @@ public final class NetworkParameters {
     public static final String MESSAGE_MAGIC = "InfiniteRicks Signed Message:\n";
 
     public static final String OFFICIAL_API_HOST = "server.infinitericks.com";
+    public static final String EXPLORER_HOST = "serverexplorer.infinitericks.com";
+    /** Local bind on VPS; public URL uses HTTPS :443 via reverse proxy. */
+    public static final String SERVER_BIND_HOST = "127.0.0.1";
     public static final int OFFICIAL_API_PORT = 40002;
     public static final int EXPLORER_PORT = 40051;
-    public static final String OFFICIAL_API_BASE_URL = "https://" + OFFICIAL_API_HOST + ":" + OFFICIAL_API_PORT;
-    public static final String EXPLORER_BASE_URL = "https://" + OFFICIAL_API_HOST + ":" + EXPLORER_PORT;
+    public static final String OFFICIAL_API_BASE_URL = "https://" + OFFICIAL_API_HOST;
+    public static final String EXPLORER_BASE_URL = "https://" + EXPLORER_HOST;
 
     public static final int P2P_PORT = 31647;
     public static final int RPC_PORT = 31648;
