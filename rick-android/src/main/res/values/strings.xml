@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">InfiniteRicks Wallet</string>
+    <color name="rick_green">#5EAE4C</color>
+    <color name="rick_background">#0B1118</color>
+    <color name="rick_surface">#15202B</color>
+    <color name="rick_text">#EAF4FF</color>
+    <color name="rick_muted">#7A95B0</color>
+</resources>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/rick_background"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:id="@+id/addressValue"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/rick_text"
+        android:textIsSelectable="true" />
+
+    <Button
+        android:id="@+id/copyAddressButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:backgroundTint="@color/rick_green"
+        android:text="Copiar endereço" />
+
+    <EditText
+        android:id="@+id/restoreWifInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:hint="WIF de backup"
+        android:textColor="@color/rick_text"
+        android:textColorHint="@color/rick_muted" />
+
+    <Button
+        android:id="@+id/restoreWifButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:backgroundTint="@color/rick_green"
+        android:text="Restaurar WIF" />
+</LinearLayout>

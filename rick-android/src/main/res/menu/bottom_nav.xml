@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_home"
+        android:icon="@android:drawable/ic_menu_view"
+        android:title="Início" />
+    <item
+        android:id="@+id/nav_send"
+        android:icon="@android:drawable/ic_menu_send"
+        android:title="Enviar" />
+    <item
+        android:id="@+id/nav_receive"
+        android:icon="@android:drawable/ic_menu_add"
+        android:title="Receber" />
+    <item
+        android:id="@+id/nav_wallets"
+        android:icon="@android:drawable/ic_menu_manage"
+        android:title="Carteiras" />
+    <item
+        android:id="@+id/nav_settings"
+        android:icon="@android:drawable/ic_menu_preferences"
+        android:title="Config" />
+</menu>

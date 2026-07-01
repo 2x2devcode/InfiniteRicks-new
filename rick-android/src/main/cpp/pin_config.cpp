@@ -1,0 +1,37 @@
+#include <jni.h>
+#include <string>
+#include <vector>
+
+namespace {
+std::string xorCombine(const std::vector<unsigned char>& data, const std::vector<unsigned char>& pad) {
+    std::string out;
+    out.reserve(data.size());
+    for (size_t i = 0; i < data.size(); ++i) {
+        out.push_back(static_cast<char>(data[i] ^ pad[i % pad.size()]));
+    }
+    return out;
+}
+}
+
+extern "C"
+JNIEXPORT jobjectArray JNICALL
+Java_com_infinitericks_wallet_security_NativePinProvider_getPinnedHashes(
+        JNIEnv* env,
+        jobject /* thiz */) {
+  const std::vector<unsigned char> data = {
+      0x18, 0x5c, 0x6b, 0x10, 0x21, 0x7e, 0x3a, 0x51, 0x45, 0x07, 0x69, 0x4e,
+      0x25, 0x7f, 0x38, 0x03, 0x11, 0x0f, 0x6e, 0x14, 0x71, 0x79, 0x31, 0x54,
+      0x19, 0x0d, 0x68, 0x13, 0x77, 0x2c, 0x6c, 0x01, 0x42, 0x0e, 0x67, 0x45,
+      0x24, 0x28, 0x3a, 0x55, 0x45, 0x0d, 0x6b, 0x14, 0x70, 0x7a, 0x6b, 0x00,
+      0x19, 0x0d, 0x3e, 0x4f, 0x27, 0x7a, 0x39, 0x0f, 0x14, 0x08, 0x3d, 0x14,
+      0x2b, 0x78, 0x6e, 0x51};
+  const std::vector<unsigned char> pad = {0x21, 0x3e, 0x5f, 0x76, 0x12, 0x4d, 0x08, 0x37};
+  std::string pin = xorCombine(data, pad);
+
+  jclass stringClass = env->FindClass("java/lang/String");
+  jobjectArray array = env->NewObjectArray(1, stringClass, nullptr);
+  jstring value = env->NewStringUTF(pin.c_str());
+  env->SetObjectArrayElement(array, 0, value);
+  env->DeleteLocalRef(value);
+  return array;
+}
