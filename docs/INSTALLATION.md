@@ -66,7 +66,7 @@ bash scripts/run-server-services.sh
 | API oficial | `https://server.infinitericks.com` | `127.0.0.1:40002` | `/api/*` |
 | Explorer fallback | `https://serverexplorer.infinitericks.com` | `127.0.0.1:40051` | `/ext/*` |
 
-Exemplo nginx (API):
+Exemplo nginx (API) — use `scripts/nginx-rick-api.conf.example` (inclui `proxy_read_timeout 30s`):
 
 ```nginx
 server {
@@ -74,6 +74,7 @@ server {
     server_name server.infinitericks.com;
     location / {
         proxy_pass http://127.0.0.1:40002;
+        proxy_read_timeout 30s;
     }
 }
 ```

@@ -20,7 +20,7 @@ public final class RickWalletApp extends Application {
         NativePinProvider pinProvider = new NativePinProvider();
         apiClient = new RickApiClient(
                 ApiEndpoints.OFFICIAL_BASE_URLS,
-                RickHttpClientFactory.create(pinProvider, "InfiniteRicks-Wallet/1.1.6")
+                RickHttpClientFactory.create(pinProvider, "InfiniteRicks-Wallet/1.1.7")
         );
         walletRepository = new WalletRepository(this, apiClient);
         try {

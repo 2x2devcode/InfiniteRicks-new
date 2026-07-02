@@ -32,9 +32,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Indexes P2PKH outputs and spends from the local node so balance/UTXO queries work
@@ -46,10 +49,16 @@ final class ChainIndexer {
     }.getType();
     private static final int SYNC_BATCH_SIZE = 100;
     private static final int[] LOOKBACK_WINDOWS = readLookbackWindows();
-    private static final long QUERY_BUDGET_MS = readLongEnv("INDEX_QUERY_BUDGET_MS", 25_000L);
-    private static final int INCREMENTAL_SCAN_MAX_BLOCKS = readIntEnv("INDEX_INCREMENTAL_MAX", 500);
+    private static final int[] FAST_LOOKBACK_WINDOWS = readFastLookbackWindows();
+    private static final long FAST_QUERY_BUDGET_MS = readLongEnv("INDEX_FAST_BUDGET_MS", 6_000L);
+    private static final long QUERY_BUDGET_MS = readLongEnv("INDEX_QUERY_BUDGET_MS", 60_000L);
+    private static final int INCREMENTAL_SCAN_MAX_BLOCKS = readIntEnv("INDEX_INCREMENTAL_MAX", 200);
     private static final int START_HEIGHT = readIntEnv("INDEX_START_HEIGHT", 0);
-    private static final int SCAN_WORKERS = readIntEnv("INDEX_SCAN_WORKERS", 16);
+    private static final int SCAN_WORKERS = readIntEnv("INDEX_SCAN_WORKERS", 4);
+    private static final long CHUNK_TIMEOUT_MS = readLongEnv("INDEX_CHUNK_TIMEOUT_MS", 4_000L);
+
+    private final ExecutorService addressScanExecutor = Executors.newFixedThreadPool(2);
+    private final Set<String> pendingAddressScans = ConcurrentHashMap.newKeySet();
 
     private final Path indexDir;
     private final Path statePath;
@@ -120,7 +129,37 @@ final class ChainIndexer {
         }
     }
 
+    record BalanceResult(long satoshis, boolean scanning) {
+    }
+
+    BalanceResult balanceFast(String address, int minConfirmations, RpcClient rpcClient) throws IOException {
+        List<IndexedUtxo> utxos = utxosFor(address, minConfirmations, rpcClient, ScanMode.FAST);
+        long total = 0L;
+        for (IndexedUtxo utxo : utxos) {
+            total += utxo.amountSatoshis;
+        }
+        boolean scanning = false;
+        if (total == 0L) {
+            scanning = scheduleDeepScan(address, minConfirmations, rpcClient);
+        }
+        return new BalanceResult(total, scanning);
+    }
+
     List<IndexedUtxo> utxosFor(String address, int minConfirmations, RpcClient rpcClient) throws IOException {
+        return utxosFor(address, minConfirmations, rpcClient, ScanMode.FAST);
+    }
+
+    private enum ScanMode {
+        FAST,
+        DEEP
+    }
+
+    private List<IndexedUtxo> utxosFor(
+            String address,
+            int minConfirmations,
+            RpcClient rpcClient,
+            ScanMode mode
+    ) throws IOException {
         if (!AddressCodec.isValidP2pkh(address)) {
             throw new IOException("invalid address: " + address);
         }
@@ -137,7 +176,9 @@ final class ChainIndexer {
             }
         }
 
-        long deadline = System.currentTimeMillis() + QUERY_BUDGET_MS;
+        long deadline = System.currentTimeMillis()
+                + (mode == ScanMode.FAST ? FAST_QUERY_BUDGET_MS : QUERY_BUDGET_MS);
+        int[] windows = mode == ScanMode.FAST ? FAST_LOOKBACK_WINDOWS : LOOKBACK_WINDOWS;
 
         if (!merged.isEmpty() && indexed >= 0 && indexed < tip) {
             int blocksBehind = tip - indexed;
@@ -147,7 +188,7 @@ final class ChainIndexer {
         }
 
         if (merged.isEmpty()) {
-            for (int window : LOOKBACK_WINDOWS) {
+            for (int window : windows) {
                 if (System.currentTimeMillis() >= deadline || !merged.isEmpty()) {
                     break;
                 }
@@ -166,6 +207,22 @@ final class ChainIndexer {
         }
 
         return finalizeUtxos(merged, tip, minConfirmations);
+    }
+
+    private boolean scheduleDeepScan(String address, int minConfirmations, RpcClient rpcClient) {
+        if (!pendingAddressScans.add(address)) {
+            return true;
+        }
+        addressScanExecutor.submit(() -> {
+            try {
+                utxosFor(address, minConfirmations, rpcClient, ScanMode.DEEP);
+            } catch (IOException e) {
+                System.err.println("[chain-indexer] deep scan failed for " + address + ": " + e.getMessage());
+            } finally {
+                pendingAddressScans.remove(address);
+            }
+        });
+        return true;
     }
 
     private static IndexedUtxo copyUtxo(IndexedUtxo source) {
@@ -221,11 +278,7 @@ final class ChainIndexer {
     }
 
     long balanceSatoshis(String address, int minConfirmations, RpcClient rpcClient) throws IOException {
-        long total = 0L;
-        for (IndexedUtxo utxo : utxosFor(address, minConfirmations, rpcClient)) {
-            total += utxo.amountSatoshis;
-        }
-        return total;
+        return balanceFast(address, minConfirmations, rpcClient).satoshis();
     }
 
     int indexedHeight() {
@@ -297,7 +350,11 @@ final class ChainIndexer {
                 if (System.currentTimeMillis() >= deadlineMs) {
                     break;
                 }
-                chunks.add(future.get());
+                try {
+                    chunks.add(future.get(CHUNK_TIMEOUT_MS, TimeUnit.MILLISECONDS));
+                } catch (TimeoutException e) {
+                    future.cancel(true);
+                }
             }
             chunks.sort((a, b) -> Integer.compare(a.fromHeight(), b.fromHeight()));
             for (BlockScan chunkResult : chunks) {
@@ -653,9 +710,17 @@ final class ChainIndexer {
     }
 
     private static int[] readLookbackWindows() {
-        String value = System.getenv("INDEX_LOOKBACK_WINDOWS");
+        return readWindowEnv("INDEX_LOOKBACK_WINDOWS", new int[]{200, 500, 1000, 2000});
+    }
+
+    private static int[] readFastLookbackWindows() {
+        return readWindowEnv("INDEX_FAST_LOOKBACK_WINDOWS", new int[]{30, 60, 120});
+    }
+
+    private static int[] readWindowEnv(String key, int[] fallback) {
+        String value = System.getenv(key);
         if (value == null || value.isBlank()) {
-            return new int[]{150, 400, 800};
+            return fallback;
         }
         String[] parts = value.split(",");
         List<Integer> windows = new ArrayList<>();
@@ -670,7 +735,7 @@ final class ChainIndexer {
             }
         }
         if (windows.isEmpty()) {
-            return new int[]{150, 400, 800};
+            return fallback;
         }
         int[] result = new int[windows.size()];
         for (int i = 0; i < windows.size(); i++) {

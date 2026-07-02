@@ -124,7 +124,7 @@ public final class WalletRepository {
         return apiClient;
     }
 
-    public String refreshBalance(String address, boolean invalidateCache) throws Exception {
+    public RickApiClient.BalanceResponse refreshBalanceResponse(String address, boolean invalidateCache) throws Exception {
         if (invalidateCache) {
             try {
                 apiClient.invalidateBalanceCache(address);
@@ -132,7 +132,11 @@ public final class WalletRepository {
                 // Server may not require explicit invalidation.
             }
         }
-        return apiClient.getBalance(address);
+        return apiClient.getBalanceResponse(address);
+    }
+
+    public String refreshBalance(String address, boolean invalidateCache) throws Exception {
+        return refreshBalanceResponse(address, invalidateCache).balance();
     }
 
     public String refreshBalance(String address) throws Exception {

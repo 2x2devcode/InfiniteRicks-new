@@ -22,10 +22,16 @@ final class RpcClient {
     private final URI rpcUri;
     private final String authHeader;
     private final AtomicLong idSequence = new AtomicLong(1);
+    private final int callTimeoutSeconds;
 
     RpcClient(String host, int port, String user, String password) {
+        this(host, port, user, password, readTimeoutSeconds());
+    }
+
+    RpcClient(String host, int port, String user, String password, int callTimeoutSeconds) {
+        this.callTimeoutSeconds = callTimeoutSeconds;
         this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
+                .connectTimeout(Duration.ofSeconds(5))
                 .build();
         this.rpcUri = URI.create(String.format(Locale.US, "http://%s:%d/", host, port));
         String token = Base64.getEncoder().encodeToString((user + ":" + password).getBytes(StandardCharsets.UTF_8));
@@ -40,7 +46,7 @@ final class RpcClient {
         request.add("params", params == null ? new JsonArray() : params);
         try {
             HttpRequest httpRequest = HttpRequest.newBuilder(rpcUri)
-                    .timeout(Duration.ofSeconds(120))
+                    .timeout(Duration.ofSeconds(callTimeoutSeconds))
                     .header("Authorization", authHeader)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(request)))
@@ -60,6 +66,18 @@ final class RpcClient {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("RPC interrupted", e);
+        }
+    }
+
+    private static int readTimeoutSeconds() {
+        String value = System.getenv("RPC_TIMEOUT_SECONDS");
+        if (value == null || value.isBlank()) {
+            return 8;
+        }
+        try {
+            return Math.max(3, Integer.parseInt(value.trim()));
+        } catch (NumberFormatException ignored) {
+            return 8;
         }
     }
 }

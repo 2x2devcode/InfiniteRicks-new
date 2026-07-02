@@ -1,0 +1,46 @@
+# Exemplo nginx para API InfiniteRicks (Ubuntu).
+# Ajuste ssl_certificate* conforme seu certificado.
+#
+# Instale em /etc/nginx/sites-available/rick-api e ative com:
+#   sudo ln -s /etc/nginx/sites-available/rick-api /etc/nginx/sites-enabled/
+#   sudo nginx -t && sudo systemctl reload nginx
+
+server {
+    listen 443 ssl;
+    server_name server.infinitericks.com;
+
+    # ssl_certificate /etc/letsencrypt/live/server.infinitericks.com/fullchain.pem;
+    # ssl_certificate_key /etc/letsencrypt/live/server.infinitericks.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:40002;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Respostas rapidas da API; deep scan roda em segundo plano no servidor.
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name serverexplorer.infinitericks.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:40051;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+    }
+}

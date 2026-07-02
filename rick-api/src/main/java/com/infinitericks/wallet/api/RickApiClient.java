@@ -59,12 +59,18 @@ public final class RickApiClient {
     }
 
     public String getBalance(String address) throws IOException {
+        BalanceResponse response = getBalanceResponse(address);
+        return response.balance();
+    }
+
+    public BalanceResponse getBalanceResponse(String address) throws IOException {
         try {
-            return getJsonOnce(String.format(Locale.US, ApiEndpoints.ADDRESS_BALANCE, address), true)
-                    .get("balance")
-                    .getAsString();
+            JsonObject json = getJsonOnce(String.format(Locale.US, ApiEndpoints.ADDRESS_BALANCE, address), true);
+            boolean scanning = json.has("scanning") && json.get("scanning").getAsBoolean();
+            return new BalanceResponse(json.get("balance").getAsString(), scanning, "official-api");
         } catch (IOException officialError) {
-            return getExplorerBalance(address);
+            String explorerBalance = getExplorerBalance(address);
+            return new BalanceResponse(explorerBalance, false, "explorer-fallback");
         }
     }
 
@@ -260,5 +266,8 @@ public final class RickApiClient {
     }
 
     public record ExplorerSummary(long blockCount, String supply, int connections) {
+    }
+
+    public record BalanceResponse(String balance, boolean scanning, String source) {
     }
 }

@@ -1,6 +1,8 @@
 package com.infinitericks.wallet.ui.home;
 
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -21,17 +23,14 @@ import com.infinitericks.wallet.ui.MainActivity;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 public final class HomeFragment extends Fragment {
     private static final String TAG = "RickWallet";
-    private static final long BALANCE_TIMEOUT_SECONDS = 45L;
+    private static final long BALANCE_TIMEOUT_SECONDS = 20L;
+    private static final long BALANCE_POLL_MS = 8_000L;
 
-    private final ExecutorService balanceExecutor = Executors.newSingleThreadExecutor();
+    private final Handler pollHandler = new Handler(Looper.getMainLooper());
+    private final Runnable pollRunnable = () -> refresh(false);
 
     private TextView balanceValue;
     private TextView networkStatus;
@@ -53,7 +52,7 @@ public final class HomeFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
-        balanceExecutor.shutdownNow();
+        pollHandler.removeCallbacks(pollRunnable);
         super.onDestroyView();
     }
 
@@ -61,6 +60,7 @@ public final class HomeFragment extends Fragment {
         if (!isAdded()) {
             return;
         }
+        pollHandler.removeCallbacks(pollRunnable);
         WalletRepository repository = ((MainActivity) requireActivity()).repository();
         repository.activeAccount().ifPresentOrElse(account -> {
             postToUi(() -> {
@@ -85,22 +85,20 @@ public final class HomeFragment extends Fragment {
                     return;
                 }
 
-                Future<String> balanceFuture = balanceExecutor.submit(() ->
-                        repository.refreshBalance(account.address(), invalidateCache)
-                );
                 try {
-                    String balance = balanceFuture.get(BALANCE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                    postToUi(() -> balanceValue.setText(formatBalance(balance) + " " + NetworkParameters.TICKER));
-                } catch (TimeoutException e) {
-                    balanceFuture.cancel(true);
-                    Log.e(TAG, "balance refresh timed out", e);
+                    RickApiClient.BalanceResponse balance = repository.refreshBalanceResponse(
+                            account.address(),
+                            invalidateCache
+                    );
+                    boolean shouldPoll = balance.scanning() || isZeroBalance(balance.balance());
                     postToUi(() -> {
-                        balanceValue.setText("-- " + NetworkParameters.TICKER);
-                        Toast.makeText(
-                                requireContext(),
-                                "Saldo demorou demais. Tente Atualizar saldo novamente.",
-                                Toast.LENGTH_LONG
-                        ).show();
+                        balanceValue.setText(formatBalance(balance.balance()) + " " + NetworkParameters.TICKER);
+                        if (balance.scanning()) {
+                            networkStatus.setText("Indexando saldo na rede...");
+                        }
+                        if (shouldPoll) {
+                            pollHandler.postDelayed(pollRunnable, BALANCE_POLL_MS);
+                        }
                     });
                 } catch (Exception e) {
                     Log.e(TAG, "balance refresh failed", e);
@@ -108,10 +106,19 @@ public final class HomeFragment extends Fragment {
                     postToUi(() -> {
                         balanceValue.setText("-- " + NetworkParameters.TICKER);
                         Toast.makeText(requireContext(), "Saldo: " + message, Toast.LENGTH_LONG).show();
+                        pollHandler.postDelayed(pollRunnable, BALANCE_POLL_MS);
                     });
                 }
             });
         }, () -> balanceValue.setText("Sem conta ativa"));
+    }
+
+    private static boolean isZeroBalance(String balance) {
+        try {
+            return new BigDecimal(balance.trim()).compareTo(BigDecimal.ZERO) == 0;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     private static String formatBalance(String balance) {
