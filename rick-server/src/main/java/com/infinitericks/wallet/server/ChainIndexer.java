@@ -38,6 +38,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Indexes P2PKH outputs and spends from the local node so balance/UTXO queries work
@@ -56,6 +57,7 @@ final class ChainIndexer {
     private static final int START_HEIGHT = readIntEnv("INDEX_START_HEIGHT", 0);
     private static final int SCAN_WORKERS = readIntEnv("INDEX_SCAN_WORKERS", 4);
     private static final long CHUNK_TIMEOUT_MS = readLongEnv("INDEX_CHUNK_TIMEOUT_MS", 4_000L);
+    private static final long CHAIN_TIP_STALE_MS = readLongEnv("INDEX_CHAIN_TIP_STALE_MS", 5_000L);
 
     private final ExecutorService addressScanExecutor = Executors.newFixedThreadPool(2);
     private final Set<String> pendingAddressScans = ConcurrentHashMap.newKeySet();
@@ -63,10 +65,13 @@ final class ChainIndexer {
     private final Path indexDir;
     private final Path statePath;
     private final Path lockPath;
-    private final Object memoryLock = new Object();
+    private final ReentrantReadWriteLock indexLock = new ReentrantReadWriteLock();
+    private final ReentrantReadWriteLock.ReadLock readLock = indexLock.readLock();
+    private final ReentrantReadWriteLock.WriteLock writeLock = indexLock.writeLock();
 
     private int indexedHeight = -1;
     private int chainTip = -1;
+    private volatile long chainTipUpdatedAtMs = 0L;
     private final Map<String, IndexedUtxo> outpoints = new HashMap<>();
     private final Map<String, Set<String>> utxosByAddress = new HashMap<>();
 
@@ -107,25 +112,49 @@ final class ChainIndexer {
     }
 
     void syncToTip(RpcClient rpcClient) throws IOException {
-        synchronized (memoryLock) {
-            chainTip = readBlockCount(rpcClient);
-            int nextHeight = indexedHeight + 1;
+        int tip = readBlockCount(rpcClient);
+        int nextHeight;
+        writeLock.lock();
+        try {
+            chainTip = tip;
+            chainTipUpdatedAtMs = System.currentTimeMillis();
+            nextHeight = indexedHeight + 1;
             if (nextHeight < START_HEIGHT) {
                 nextHeight = START_HEIGHT;
             }
-            while (nextHeight <= chainTip) {
-                int batchEnd = Math.min(chainTip, nextHeight + SYNC_BATCH_SIZE - 1);
-                for (int height = nextHeight; height <= batchEnd; height++) {
-                    indexBlock(rpcClient, height);
+        } finally {
+            writeLock.unlock();
+        }
+        while (nextHeight <= tip) {
+            int batchEnd = Math.min(tip, nextHeight + SYNC_BATCH_SIZE - 1);
+            for (int height = nextHeight; height <= batchEnd; height++) {
+                JsonObject block = fetchBlock(rpcClient, height);
+                writeLock.lock();
+                try {
+                    applyBlockToIndex(block, height);
                     indexedHeight = height;
+                } finally {
+                    writeLock.unlock();
                 }
-                persistStateLocked();
+            }
+            writeLock.lock();
+            try {
                 if (indexedHeight % 5_000 == 0) {
                     System.out.println("[chain-indexer] indexed through block " + indexedHeight + " / " + chainTip);
                 }
-                nextHeight = indexedHeight + 1;
+            } finally {
+                writeLock.unlock();
             }
-            chainTip = readBlockCount(rpcClient);
+            persistState();
+            nextHeight = batchEnd + 1;
+            tip = readBlockCount(rpcClient);
+            writeLock.lock();
+            try {
+                chainTip = tip;
+                chainTipUpdatedAtMs = System.currentTimeMillis();
+            } finally {
+                writeLock.unlock();
+            }
         }
     }
 
@@ -133,9 +162,13 @@ final class ChainIndexer {
     }
 
     BalanceResult balanceFast(String address, int minConfirmations, RpcClient rpcClient) throws IOException {
-        List<IndexedUtxo> utxos = utxosFor(address, minConfirmations, rpcClient, ScanMode.FAST);
+        if (!AddressCodec.isValidP2pkh(address)) {
+            throw new IOException("invalid address: " + address);
+        }
+        refreshChainTip(rpcClient);
+        List<IndexedUtxo> indexed = readIndexedOnly(address, minConfirmations);
         long total = 0L;
-        for (IndexedUtxo utxo : utxos) {
+        for (IndexedUtxo utxo : indexed) {
             total += utxo.amountSatoshis;
         }
         boolean scanning = false;
@@ -146,39 +179,72 @@ final class ChainIndexer {
     }
 
     List<IndexedUtxo> utxosFor(String address, int minConfirmations, RpcClient rpcClient) throws IOException {
-        return utxosFor(address, minConfirmations, rpcClient, ScanMode.FAST);
+        refreshChainTip(rpcClient);
+        List<IndexedUtxo> indexed = readIndexedOnly(address, minConfirmations);
+        if (indexed.isEmpty()) {
+            scheduleDeepScan(address, minConfirmations, rpcClient);
+        }
+        return indexed;
     }
 
-    private enum ScanMode {
-        FAST,
-        DEEP
+    private void refreshChainTip(RpcClient rpcClient) throws IOException {
+        if (System.currentTimeMillis() - chainTipUpdatedAtMs < CHAIN_TIP_STALE_MS) {
+            return;
+        }
+        int tip = readBlockCount(rpcClient);
+        writeLock.lock();
+        try {
+            chainTip = tip;
+            chainTipUpdatedAtMs = System.currentTimeMillis();
+        } finally {
+            writeLock.unlock();
+        }
     }
 
-    private List<IndexedUtxo> utxosFor(
+    private List<IndexedUtxo> readIndexedOnly(String address, int minConfirmations) {
+        readLock.lock();
+        try {
+            List<IndexedUtxo> result = new ArrayList<>();
+            for (IndexedUtxo utxo : listIndexedUtxos(address, minConfirmations)) {
+                result.add(copyUtxo(utxo));
+            }
+            return result;
+        } finally {
+            readLock.unlock();
+        }
+    }
+
+    private List<IndexedUtxo> utxosForDeep(
             String address,
             int minConfirmations,
-            RpcClient rpcClient,
-            ScanMode mode
+            RpcClient rpcClient
     ) throws IOException {
         if (!AddressCodec.isValidP2pkh(address)) {
             throw new IOException("invalid address: " + address);
         }
 
-        int tip;
+        int tip = readBlockCount(rpcClient);
         int indexed;
         Map<String, IndexedUtxo> merged = new LinkedHashMap<>();
-        synchronized (memoryLock) {
-            chainTip = readBlockCount(rpcClient);
-            tip = chainTip;
+        readLock.lock();
+        try {
             indexed = indexedHeight;
             for (IndexedUtxo utxo : listIndexedUtxos(address, minConfirmations)) {
                 merged.put(outpointKey(utxo.txid, utxo.vout), copyUtxo(utxo));
             }
+        } finally {
+            readLock.unlock();
+        }
+        writeLock.lock();
+        try {
+            chainTip = tip;
+            chainTipUpdatedAtMs = System.currentTimeMillis();
+        } finally {
+            writeLock.unlock();
         }
 
-        long deadline = System.currentTimeMillis()
-                + (mode == ScanMode.FAST ? FAST_QUERY_BUDGET_MS : QUERY_BUDGET_MS);
-        int[] windows = mode == ScanMode.FAST ? FAST_LOOKBACK_WINDOWS : LOOKBACK_WINDOWS;
+        long deadline = System.currentTimeMillis() + QUERY_BUDGET_MS;
+        int[] windows = LOOKBACK_WINDOWS;
 
         if (!merged.isEmpty() && indexed >= 0 && indexed < tip) {
             int blocksBehind = tip - indexed;
@@ -198,12 +264,17 @@ final class ChainIndexer {
         }
 
         if (!merged.isEmpty()) {
-            synchronized (memoryLock) {
+            writeLock.lock();
+            try {
                 chainTip = tip;
+                chainTipUpdatedAtMs = System.currentTimeMillis();
                 for (IndexedUtxo utxo : merged.values()) {
                     addOutpoint(utxo.txid, utxo.vout, utxo.address, utxo.amountSatoshis, utxo.blockHeight);
                 }
+            } finally {
+                writeLock.unlock();
             }
+            persistState();
         }
 
         return finalizeUtxos(merged, tip, minConfirmations);
@@ -215,7 +286,7 @@ final class ChainIndexer {
         }
         addressScanExecutor.submit(() -> {
             try {
-                utxosFor(address, minConfirmations, rpcClient, ScanMode.DEEP);
+                utxosForDeep(address, minConfirmations, rpcClient);
             } catch (IOException e) {
                 System.err.println("[chain-indexer] deep scan failed for " + address + ": " + e.getMessage());
             } finally {
@@ -282,14 +353,20 @@ final class ChainIndexer {
     }
 
     int indexedHeight() {
-        synchronized (memoryLock) {
+        readLock.lock();
+        try {
             return indexedHeight;
+        } finally {
+            readLock.unlock();
         }
     }
 
     int chainTip() {
-        synchronized (memoryLock) {
+        readLock.lock();
+        try {
             return chainTip;
+        } finally {
+            readLock.unlock();
         }
     }
 
@@ -468,8 +545,7 @@ final class ChainIndexer {
     private record BlockScan(int fromHeight, Map<String, IndexedUtxo> created, List<String> spentKeys) {
     }
 
-    private void indexBlock(RpcClient rpcClient, int height) throws IOException {
-        JsonObject block = fetchBlock(rpcClient, height);
+    private void applyBlockToIndex(JsonObject block, int height) {
         JsonArray transactions = block.getAsJsonArray("tx");
         if (transactions == null) {
             return;
@@ -479,6 +555,16 @@ final class ChainIndexer {
                 continue;
             }
             processTransaction(txElement.getAsJsonObject(), height);
+        }
+    }
+
+    private void indexBlock(RpcClient rpcClient, int height) throws IOException {
+        JsonObject block = fetchBlock(rpcClient, height);
+        writeLock.lock();
+        try {
+            applyBlockToIndex(block, height);
+        } finally {
+            writeLock.unlock();
         }
     }
 
@@ -629,7 +715,8 @@ final class ChainIndexer {
     }
 
     private void loadState() throws IOException {
-        synchronized (memoryLock) {
+        writeLock.lock();
+        try {
             if (!Files.exists(statePath)) {
                 indexedHeight = START_HEIGHT - 1;
                 return;
@@ -642,6 +729,7 @@ final class ChainIndexer {
                 }
                 indexedHeight = state.indexedHeight;
                 chainTip = state.chainTip;
+                chainTipUpdatedAtMs = System.currentTimeMillis();
                 outpoints.clear();
                 utxosByAddress.clear();
                 if (state.outpoints != null) {
@@ -653,19 +741,34 @@ final class ChainIndexer {
                     }
                 }
             }
+        } finally {
+            writeLock.unlock();
         }
     }
 
-    private void persistStateLocked() throws IOException {
-        PersistedState state = new PersistedState();
-        state.indexedHeight = indexedHeight;
-        state.chainTip = chainTip;
-        state.outpoints = new HashMap<>(outpoints);
-        state.utxosByAddress = new HashMap<>();
-        for (Map.Entry<String, Set<String>> entry : utxosByAddress.entrySet()) {
-            state.utxosByAddress.put(entry.getKey(), new HashSet<>(entry.getValue()));
-        }
+    private void persistState() throws IOException {
+        PersistedState state = snapshotState();
+        writeStateToDisk(state);
+    }
 
+    private PersistedState snapshotState() {
+        writeLock.lock();
+        try {
+            PersistedState state = new PersistedState();
+            state.indexedHeight = indexedHeight;
+            state.chainTip = chainTip;
+            state.outpoints = new HashMap<>(outpoints);
+            state.utxosByAddress = new HashMap<>();
+            for (Map.Entry<String, Set<String>> entry : utxosByAddress.entrySet()) {
+                state.utxosByAddress.put(entry.getKey(), new HashSet<>(entry.getValue()));
+            }
+            return state;
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    private void writeStateToDisk(PersistedState state) throws IOException {
         Files.createDirectories(indexDir);
         try (FileChannel channel = FileChannel.open(
                 lockPath,

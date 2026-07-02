@@ -88,6 +88,17 @@ EXPLORER_BODY="$(curl -sS "http://${BIND_HOST}:${EXPLORER_PORT}/ext/health" 2>/d
 
 if echo "${API_BODY}" | grep -q '"rpc":"ok"'; then
   echo "  API:      OK"
+  BALANCE_START="$(date +%s%3N 2>/dev/null || python3 -c 'import time; print(int(time.time()*1000))')"
+  BALANCE_BODY="$(curl -sS --max-time 5 "http://${BIND_HOST}:${API_PORT}/api/address/1AYqgJLpBzhyfejNNMJtyZ4QTcMmi8RU9g/balance" 2>/dev/null || true)"
+  BALANCE_END="$(date +%s%3N 2>/dev/null || python3 -c 'import time; print(int(time.time()*1000))')"
+  if echo "${BALANCE_BODY}" | grep -q '"address"'; then
+    ELAPSED=$((BALANCE_END - BALANCE_START))
+    echo "  Balance:  OK (${ELAPSED}ms, local bypass nginx)"
+    echo "            ${BALANCE_BODY}"
+  else
+    echo "  Balance:  FALHA (deve responder em <5s apos este deploy)"
+    echo "            ${BALANCE_BODY}"
+  fi
 else
   echo "  API:      FALHA"
   echo "            ${API_BODY}"

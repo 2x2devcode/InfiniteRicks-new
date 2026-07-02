@@ -88,7 +88,15 @@ public final class RickServer {
         });
         app.get("/api/status", ServerSupport.rpc(service::status));
         app.get("/api/fee", ServerSupport.rpc(service::fee));
-        app.get("/api/address/{address}/balance", ctx -> JsonResponses.write(ctx, service.balance(ctx.pathParam("address"))));
+        app.get("/api/address/{address}/balance", ctx -> {
+            long started = System.nanoTime();
+            JsonObject body = service.balance(ctx.pathParam("address"));
+            long elapsedMs = (System.nanoTime() - started) / 1_000_000L;
+            if (elapsedMs > 2_000L) {
+                System.out.println("[rick-api] slow balance " + ctx.pathParam("address") + " in " + elapsedMs + "ms");
+            }
+            JsonResponses.write(ctx, body);
+        });
         app.get("/api/address/{address}/utxos", ctx -> JsonResponses.write(ctx, service.utxos(ctx.pathParam("address"))));
         app.get("/api/address/{address}/txs", ctx -> JsonResponses.write(ctx, Map.of("transactions", List.of())));
         app.post("/api/tx/broadcast", ctx -> {
