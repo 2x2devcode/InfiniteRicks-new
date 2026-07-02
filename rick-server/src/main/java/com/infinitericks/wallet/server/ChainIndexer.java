@@ -46,6 +46,7 @@ final class ChainIndexer {
     }.getType();
     private static final int SYNC_BATCH_SIZE = 100;
     private static final int DEFAULT_LOOKBACK_BLOCKS = readIntEnv("INDEX_LOOKBACK_BLOCKS", 2_000);
+    private static final int INCREMENTAL_SCAN_MAX_BLOCKS = readIntEnv("INDEX_INCREMENTAL_MAX", 2_000);
     private static final int START_HEIGHT = readIntEnv("INDEX_START_HEIGHT", 0);
 
     private final Path indexDir;
@@ -127,9 +128,11 @@ final class ChainIndexer {
             for (IndexedUtxo utxo : listIndexedUtxos(address, minConfirmations)) {
                 merged.put(outpointKey(utxo.txid, utxo.vout), utxo);
             }
-            if (indexedHeight < chainTip) {
-                int fromHeight = Math.max(START_HEIGHT, indexedHeight + 1);
-                mergeWindow(rpcClient, address, fromHeight, chainTip, minConfirmations, merged);
+            if (indexedHeight >= 0 && indexedHeight < chainTip) {
+                int blocksBehind = chainTip - indexedHeight;
+                if (blocksBehind <= INCREMENTAL_SCAN_MAX_BLOCKS) {
+                    mergeWindow(rpcClient, address, indexedHeight + 1, chainTip, minConfirmations, merged);
+                }
             }
             if (merged.isEmpty()) {
                 int fromHeight = Math.max(START_HEIGHT, chainTip - DEFAULT_LOOKBACK_BLOCKS + 1);

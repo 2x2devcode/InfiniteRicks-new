@@ -73,12 +73,20 @@ public final class WalletRepository {
         persist(password, store);
     }
 
-    public void importWifToSession(String label, String wif) {
+    public WalletAccount importWifToSession(String label, String wif) throws Exception {
         if (sessionPassword == null) {
             throw new IllegalStateException("wallet locked");
         }
-        walletStore.addAccount(WalletAccount.fromWif(label, wif));
-        saveWalletSnapshot();
+        WalletAccount account = WalletAccount.fromWif(label, wif.trim());
+        walletStore.addAccount(account);
+        saveWalletSnapshotOrThrow();
+        return account;
+    }
+
+    public void restoreWalletFromWif(String password, String wif) throws Exception {
+        WalletStore store = new WalletStore();
+        store.addAccount(WalletAccount.fromWif("Principal", wif.trim()));
+        persist(password, store);
     }
 
     public List<WalletAccount> accounts() {
@@ -194,14 +202,18 @@ public final class WalletRepository {
         sessionPassword = password.toCharArray();
     }
 
-    private void saveWalletSnapshot() {
+    private void saveWalletSnapshotOrThrow() throws Exception {
         if (sessionPassword == null) {
-            return;
+            throw new IllegalStateException("wallet locked");
         }
+        securePrefs.edit()
+                .putString(KEY_WALLET, walletStore.exportEncrypted(new String(sessionPassword)))
+                .apply();
+    }
+
+    private void saveWalletSnapshot() {
         try {
-            securePrefs.edit()
-                    .putString(KEY_WALLET, walletStore.exportEncrypted(new String(sessionPassword)))
-                    .apply();
+            saveWalletSnapshotOrThrow();
         } catch (Exception ignored) {
             // Caller can surface persistence errors when needed.
         }

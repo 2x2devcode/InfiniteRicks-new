@@ -21,9 +21,17 @@ import com.infinitericks.wallet.ui.MainActivity;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public final class HomeFragment extends Fragment {
     private static final String TAG = "RickWallet";
+    private static final long BALANCE_TIMEOUT_SECONDS = 120L;
+
+    private final ExecutorService balanceExecutor = Executors.newSingleThreadExecutor();
 
     private TextView balanceValue;
     private TextView networkStatus;
@@ -43,18 +51,25 @@ public final class HomeFragment extends Fragment {
         refresh(false);
     }
 
+    @Override
+    public void onDestroyView() {
+        balanceExecutor.shutdownNow();
+        super.onDestroyView();
+    }
+
     private void refresh(boolean invalidateCache) {
         if (!isAdded()) {
             return;
         }
         WalletRepository repository = ((MainActivity) requireActivity()).repository();
         repository.activeAccount().ifPresentOrElse(account -> {
-            postToUi(() -> networkStatus.setText("Sincronizando rede..."));
+            postToUi(() -> {
+                networkStatus.setText("Sincronizando rede...");
+                balanceValue.setText("Carregando saldo...");
+            });
             repository.runIo(() -> {
-                RickApiClient.NetworkStatus status = null;
                 try {
-                    status = repository.refreshNetworkStatus();
-                    RickApiClient.NetworkStatus network = status;
+                    RickApiClient.NetworkStatus network = repository.refreshNetworkStatus();
                     postToUi(() -> networkStatus.setText(
                             "Rede: " + network.blocks() + " blocos via " + network.source()
                                     + " | peers " + network.peers()
@@ -64,15 +79,29 @@ public final class HomeFragment extends Fragment {
                     String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
                     postToUi(() -> {
                         networkStatus.setText("Rede indisponível. Verifique API e explorer.");
+                        balanceValue.setText("-- " + NetworkParameters.TICKER);
                         Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
                     });
                     return;
                 }
 
-                postToUi(() -> balanceValue.setText("Carregando saldo..."));
+                Future<String> balanceFuture = balanceExecutor.submit(() ->
+                        repository.refreshBalance(account.address(), invalidateCache)
+                );
                 try {
-                    String balance = repository.refreshBalance(account.address(), invalidateCache);
+                    String balance = balanceFuture.get(BALANCE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
                     postToUi(() -> balanceValue.setText(formatBalance(balance) + " " + NetworkParameters.TICKER));
+                } catch (TimeoutException e) {
+                    balanceFuture.cancel(true);
+                    Log.e(TAG, "balance refresh timed out", e);
+                    postToUi(() -> {
+                        balanceValue.setText("-- " + NetworkParameters.TICKER);
+                        Toast.makeText(
+                                requireContext(),
+                                "Saldo demorou demais. Tente Atualizar saldo novamente.",
+                                Toast.LENGTH_LONG
+                        ).show();
+                    });
                 } catch (Exception e) {
                     Log.e(TAG, "balance refresh failed", e);
                     String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
@@ -86,7 +115,14 @@ public final class HomeFragment extends Fragment {
     }
 
     private static String formatBalance(String balance) {
-        return new BigDecimal(balance.trim()).setScale(2, RoundingMode.DOWN).toPlainString();
+        if (balance == null || balance.isBlank()) {
+            return "0.00";
+        }
+        try {
+            return new BigDecimal(balance.trim()).setScale(2, RoundingMode.DOWN).toPlainString();
+        } catch (NumberFormatException e) {
+            return balance.trim();
+        }
     }
 
     private void postToUi(Runnable action) {

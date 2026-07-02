@@ -18,6 +18,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.infinitericks.wallet.R;
+import com.infinitericks.wallet.core.wallet.WalletAccount;
 import com.infinitericks.wallet.data.WalletRepository;
 import com.infinitericks.wallet.ui.MainActivity;
 import com.infinitericks.wallet.ui.QrHelper;
@@ -25,6 +26,7 @@ import com.infinitericks.wallet.ui.QrHelper;
 public final class ReceiveFragment extends Fragment {
     private TextView addressValue;
     private ImageView qrImage;
+    private EditText restoreWifInput;
 
     @Nullable
     @Override
@@ -36,15 +38,12 @@ public final class ReceiveFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         addressValue = view.findViewById(R.id.addressValue);
         qrImage = view.findViewById(R.id.qrImage);
+        restoreWifInput = view.findViewById(R.id.restoreWifInput);
         Button copyAddressButton = view.findViewById(R.id.copyAddressButton);
-        EditText restoreWifInput = view.findViewById(R.id.restoreWifInput);
         Button restoreWifButton = view.findViewById(R.id.restoreWifButton);
         WalletRepository repository = ((MainActivity) requireActivity()).repository();
 
-        repository.activeAccount().ifPresent(account -> {
-            addressValue.setText(account.address());
-            qrImage.setImageBitmap(QrHelper.createQr(QrHelper.paymentUri(account.address()), 520));
-        });
+        showAccount(repository.activeAccount().orElse(null));
 
         copyAddressButton.setOnClickListener(v -> repository.activeAccount().ifPresent(account -> {
             ClipboardManager clipboard = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
@@ -58,16 +57,18 @@ public final class ReceiveFragment extends Fragment {
                 Toast.makeText(requireContext(), "Informe a WIF de backup.", Toast.LENGTH_SHORT).show();
                 return;
             }
+            restoreWifInput.setText(wif);
             repository.runIo(() -> {
                 try {
-                    repository.importWifToSession("Restaurada", wif);
+                    WalletAccount account = repository.importWifToSession("Restaurada", wif);
                     requireActivity().runOnUiThread(() -> {
-                        restoreWifInput.setText("");
-                        Toast.makeText(requireContext(), "WIF restaurada com sucesso.", Toast.LENGTH_LONG).show();
-                        repository.activeAccount().ifPresent(account -> {
-                            addressValue.setText(account.address());
-                            qrImage.setImageBitmap(QrHelper.createQr(QrHelper.paymentUri(account.address()), 520));
-                        });
+                        showAccount(account);
+                        restoreWifInput.setText(account.wif());
+                        Toast.makeText(
+                                requireContext(),
+                                "Conta ativa: " + account.address(),
+                                Toast.LENGTH_LONG
+                        ).show();
                     });
                 } catch (Exception e) {
                     requireActivity().runOnUiThread(() ->
@@ -75,5 +76,15 @@ public final class ReceiveFragment extends Fragment {
                 }
             });
         });
+    }
+
+    private void showAccount(@Nullable WalletAccount account) {
+        if (account == null) {
+            addressValue.setText("Nenhuma conta ativa");
+            qrImage.setImageDrawable(null);
+            return;
+        }
+        addressValue.setText(account.address());
+        qrImage.setImageBitmap(QrHelper.createQr(QrHelper.paymentUri(account.address()), 520));
     }
 }

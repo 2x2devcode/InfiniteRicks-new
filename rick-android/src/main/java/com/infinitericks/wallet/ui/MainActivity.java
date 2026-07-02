@@ -1,8 +1,10 @@
 package com.infinitericks.wallet.ui;
 
+import android.content.Context;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -30,7 +32,8 @@ public final class MainActivity extends AppCompatActivity {
 
     private enum AuthMode {
         CREATE,
-        UNLOCK
+        UNLOCK,
+        RESTORE
     }
 
     private WalletRepository repository;
@@ -38,9 +41,11 @@ public final class MainActivity extends AppCompatActivity {
     private View authContainer;
     private View walletContainer;
     private EditText passwordInput;
+    private EditText wifRestoreInput;
     private TextView authTitle;
     private Button authActionButton;
     private Button authSecondaryButton;
+    private Button authRestoreButton;
     private Button authBiometricButton;
     private AuthMode authMode = AuthMode.UNLOCK;
     private boolean unlocked;
@@ -55,9 +60,11 @@ public final class MainActivity extends AppCompatActivity {
         authContainer = findViewById(R.id.authContainer);
         walletContainer = findViewById(R.id.walletContainer);
         passwordInput = findViewById(R.id.passwordInput);
+        wifRestoreInput = findViewById(R.id.wifRestoreInput);
         authTitle = findViewById(R.id.authTitle);
         authActionButton = findViewById(R.id.authActionButton);
         authSecondaryButton = findViewById(R.id.authSecondaryButton);
+        authRestoreButton = findViewById(R.id.authRestoreButton);
         authBiometricButton = findViewById(R.id.authBiometricButton);
 
         if (repository.hasWallet()) {
@@ -68,6 +75,7 @@ public final class MainActivity extends AppCompatActivity {
 
         authActionButton.setOnClickListener(v -> onAuthPrimary());
         authSecondaryButton.setOnClickListener(v -> onAuthSecondary());
+        authRestoreButton.setOnClickListener(v -> showRestore());
         authBiometricButton.setOnClickListener(v -> unlockWithBiometric());
 
         BottomNavigationView navigation = findViewById(R.id.bottomNavigation);
@@ -102,6 +110,7 @@ public final class MainActivity extends AppCompatActivity {
             walletContainer.setVisibility(View.GONE);
             authContainer.setVisibility(View.VISIBLE);
             passwordInput.setText("");
+            wifRestoreInput.setText("");
             showUnlock();
         }
     }
@@ -122,6 +131,8 @@ public final class MainActivity extends AppCompatActivity {
         }
         if (authMode == AuthMode.CREATE) {
             create(password);
+        } else if (authMode == AuthMode.RESTORE) {
+            restore(password);
         } else {
             unlock(password);
         }
@@ -142,8 +153,12 @@ public final class MainActivity extends AppCompatActivity {
     private void onAuthSecondary() {
         if (authMode == AuthMode.UNLOCK) {
             showCreate();
-        } else {
+        } else if (authMode == AuthMode.CREATE && repository.hasWallet()) {
             showUnlock();
+        } else if (authMode == AuthMode.RESTORE) {
+            showUnlock();
+        } else {
+            showCreate();
         }
     }
 
@@ -177,6 +192,26 @@ public final class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void restore(String password) {
+        String wif = wifRestoreInput.getText().toString().trim();
+        if (wif.isEmpty()) {
+            toast("Informe a WIF da carteira.");
+            return;
+        }
+        repository.runIo(() -> {
+            try {
+                repository.restoreWalletFromWif(password, wif);
+                postToUi(() -> {
+                    wifRestoreInput.setText(wif);
+                    enterWallet();
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "restore wallet failed", e);
+                postToUi(() -> toast("Falha ao restaurar: " + rootMessage(e)));
+            }
+        });
+    }
+
     private void unlock(String password) {
         if (!repository.verifyPassword(password)) {
             toast("Senha incorreta.");
@@ -194,6 +229,7 @@ public final class MainActivity extends AppCompatActivity {
     }
 
     private void enterWallet() {
+        hideKeyboard();
         unlocked = true;
         authContainer.setVisibility(View.GONE);
         walletContainer.setVisibility(View.VISIBLE);
@@ -203,13 +239,29 @@ public final class MainActivity extends AppCompatActivity {
                 .commit();
     }
 
+    private void hideKeyboard() {
+        View focus = getCurrentFocus();
+        if (focus == null) {
+            focus = passwordInput;
+        }
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            imm.hideSoftInputFromWindow(focus.getWindowToken(), 0);
+        }
+        passwordInput.clearFocus();
+        wifRestoreInput.clearFocus();
+    }
+
     private void showCreate() {
         authMode = AuthMode.CREATE;
         authTitle.setText("Criar carteira InfiniteRicks");
         authActionButton.setText("Criar carteira");
         authSecondaryButton.setText(repository.hasWallet() ? "Já tenho carteira" : "Voltar");
+        authRestoreButton.setVisibility(View.VISIBLE);
         authBiometricButton.setVisibility(View.GONE);
+        wifRestoreInput.setVisibility(View.GONE);
         passwordInput.setText("");
+        wifRestoreInput.setText("");
     }
 
     private void showUnlock() {
@@ -217,9 +269,23 @@ public final class MainActivity extends AppCompatActivity {
         authTitle.setText("Desbloquear carteira");
         authActionButton.setText("Entrar");
         authSecondaryButton.setText("Criar nova carteira");
+        authRestoreButton.setVisibility(View.VISIBLE);
         authBiometricButton.setVisibility(
                 biometricVault.isEnabled() && biometricVault.isAvailable(this) ? View.VISIBLE : View.GONE
         );
+        wifRestoreInput.setVisibility(View.GONE);
+        passwordInput.setText("");
+        wifRestoreInput.setText("");
+    }
+
+    private void showRestore() {
+        authMode = AuthMode.RESTORE;
+        authTitle.setText("Restaurar carteira");
+        authActionButton.setText("Restaurar carteira");
+        authSecondaryButton.setText("Voltar ao desbloqueio");
+        authRestoreButton.setVisibility(View.GONE);
+        authBiometricButton.setVisibility(View.GONE);
+        wifRestoreInput.setVisibility(View.VISIBLE);
         passwordInput.setText("");
     }
 

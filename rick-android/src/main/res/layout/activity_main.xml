@@ -5,60 +5,86 @@
     android:layout_height="match_parent"
     android:background="@color/rick_background">
 
-    <LinearLayout
+    <ScrollView
         android:id="@+id/authContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="24dp">
+        android:fillViewport="true">
 
-        <TextView
-            android:id="@+id/authTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@color/rick_text"
-            android:textSize="24sp"
-            android:textStyle="bold" />
-
-        <EditText
-            android:id="@+id/passwordInput"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:digits="0123456789"
-            android:hint="Senha numérica (6-10 dígitos)"
-            android:inputType="numberPassword"
-            android:maxLength="10"
-            android:textColor="@color/rick_text"
-            android:textColorHint="@color/rick_muted" />
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="24dp">
 
-        <Button
-            android:id="@+id/authActionButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:backgroundTint="@color/rick_green"
-            android:text="Entrar" />
+            <TextView
+                android:id="@+id/authTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/rick_text"
+                android:textSize="24sp"
+                android:textStyle="bold" />
 
-        <Button
-            android:id="@+id/authSecondaryButton"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Criar nova carteira"
-            android:textColor="@color/rick_muted" />
+            <EditText
+                android:id="@+id/wifRestoreInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:hint="WIF da carteira"
+                android:inputType="textVisiblePassword|textNoSuggestions"
+                android:textColor="@color/rick_text"
+                android:textColorHint="@color/rick_muted"
+                android:visibility="gone" />
 
-        <Button
-            android:id="@+id/authBiometricButton"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="Entrar com biometria"
-            android:textColor="@color/rick_green"
-            android:visibility="gone" />
-    </LinearLayout>
+            <EditText
+                android:id="@+id/passwordInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:digits="0123456789"
+                android:hint="Senha numérica (6-10 dígitos)"
+                android:imeOptions="actionDone"
+                android:inputType="numberPassword"
+                android:maxLength="10"
+                android:textColor="@color/rick_text"
+                android:textColorHint="@color/rick_muted" />
+
+            <Button
+                android:id="@+id/authActionButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:backgroundTint="@color/rick_green"
+                android:text="Entrar" />
+
+            <Button
+                android:id="@+id/authSecondaryButton"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Criar nova carteira"
+                android:textColor="@color/rick_muted" />
+
+            <Button
+                android:id="@+id/authRestoreButton"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Restaurar carteira"
+                android:textColor="@color/rick_muted" />
+
+            <Button
+                android:id="@+id/authBiometricButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="Entrar com biometria"
+                android:textColor="@color/rick_green"
+                android:visibility="gone" />
+        </LinearLayout>
+    </ScrollView>
 
     <LinearLayout
         android:id="@+id/walletContainer"
