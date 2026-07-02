@@ -9,7 +9,7 @@ final class JavalinSupport {
     static Javalin createApp() {
         return Javalin.create(config -> {
             config.showJavalinBanner = false;
-            config.jsonMapper(new io.javalin.json.JavalinJackson());
+            config.jsonMapper(new io.javalin.json.JavalinGson());
         });
     }
 }

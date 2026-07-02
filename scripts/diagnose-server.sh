@@ -76,17 +76,22 @@ check_api() {
   local url=$2
   echo "$label"
   local body
-  body="$(curl -sS "$url" 2>/dev/null || true)"
-  if echo "$body" | grep -q 'object mapper configured'; then
-    echo "   FALHA: build antigo sem Jackson — execute:"
-    echo "     git pull origin main && bash scripts/build-server-services.sh"
-    echo "     bash scripts/run-server-services.sh"
+  body="$(curl -sS --max-time 5 "$url" 2>/dev/null || true)"
+  if [[ -z "$body" ]]; then
+    echo "   FALHA: sem resposta (servico parado ou porta fechada)"
+    echo "   Execute: bash scripts/restart-server-services.sh"
+  elif echo "$body" | grep -q 'object mapper configured'; then
+    echo "   FALHA: build antigo ainda em execucao (erro Jackson/Javalin)"
+    echo "   Execute:"
+    echo "     git pull origin main"
+    echo "     bash scripts/restart-server-services.sh"
   elif echo "$body" | grep -q '"rpc":"ok"'; then
     echo "   OK: $body"
   elif echo "$body" | grep -q '"error"'; then
     echo "   RPC indisponivel (esperado ate passo 2 OK): $body"
   else
-    echo "   $body"
+    echo "   Resposta inesperada: $body"
+    echo "   Tente: bash scripts/restart-server-services.sh"
   fi
   echo ""
 }

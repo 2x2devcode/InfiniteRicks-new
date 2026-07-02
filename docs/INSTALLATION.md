@@ -50,8 +50,14 @@ bash scripts/build-server-services.sh
 Inicie ambos (JSON apenas, sem interface web):
 
 ```bash
-# Nao exporte RICK_RPC_USER manualmente — o script le ~/.InfiniteRicks/InfiniteRicks.conf
-bash scripts/build-server-services.sh
+# Atualizar codigo, recompilar e reiniciar em segundo plano (recomendado na VPS)
+git pull origin main
+bash scripts/restart-server-services.sh
+```
+
+Para teste interativo (encerra ao pressionar Ctrl+C):
+
+```bash
 bash scripts/run-server-services.sh
 ```
 
