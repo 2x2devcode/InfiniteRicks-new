@@ -13,6 +13,7 @@ import com.infinitericks.wallet.core.wallet.Amount;
 import com.infinitericks.wallet.core.wallet.WalletAccount;
 import com.infinitericks.wallet.core.wallet.WalletStore;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
