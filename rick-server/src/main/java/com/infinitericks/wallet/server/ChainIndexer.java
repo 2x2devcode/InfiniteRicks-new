@@ -45,7 +45,7 @@ final class ChainIndexer {
     private static final Type STATE_TYPE = new TypeToken<PersistedState>() {
     }.getType();
     private static final int SYNC_BATCH_SIZE = 100;
-    private static final int DEFAULT_LOOKBACK_BLOCKS = readIntEnv("INDEX_LOOKBACK_BLOCKS", 5_000);
+    private static final int DEFAULT_LOOKBACK_BLOCKS = readIntEnv("INDEX_LOOKBACK_BLOCKS", 2_000);
     private static final int START_HEIGHT = readIntEnv("INDEX_START_HEIGHT", 0);
 
     private final Path indexDir;
@@ -127,16 +127,31 @@ final class ChainIndexer {
             for (IndexedUtxo utxo : listIndexedUtxos(address, minConfirmations)) {
                 merged.put(outpointKey(utxo.txid, utxo.vout), utxo);
             }
-            int fromHeight = Math.max(START_HEIGHT, chainTip - DEFAULT_LOOKBACK_BLOCKS + 1);
-            boolean needsLookback = merged.isEmpty()
-                    || indexedHeight < chainTip
-                    || indexedHeight < fromHeight;
-            if (needsLookback) {
-                for (IndexedUtxo utxo : scanAddressWindow(rpcClient, address, fromHeight, chainTip, minConfirmations)) {
-                    merged.put(outpointKey(utxo.txid, utxo.vout), utxo);
-                }
+            if (indexedHeight < chainTip) {
+                int fromHeight = Math.max(START_HEIGHT, indexedHeight + 1);
+                mergeWindow(rpcClient, address, fromHeight, chainTip, minConfirmations, merged);
+            }
+            if (merged.isEmpty()) {
+                int fromHeight = Math.max(START_HEIGHT, chainTip - DEFAULT_LOOKBACK_BLOCKS + 1);
+                mergeWindow(rpcClient, address, fromHeight, chainTip, minConfirmations, merged);
             }
             return new ArrayList<>(merged.values());
+        }
+    }
+
+    private void mergeWindow(
+            RpcClient rpcClient,
+            String address,
+            int fromHeight,
+            int toHeight,
+            int minConfirmations,
+            Map<String, IndexedUtxo> merged
+    ) throws IOException {
+        if (fromHeight > toHeight) {
+            return;
+        }
+        for (IndexedUtxo utxo : scanAddressWindow(rpcClient, address, fromHeight, toHeight, minConfirmations)) {
+            merged.put(outpointKey(utxo.txid, utxo.vout), utxo);
         }
     }
 

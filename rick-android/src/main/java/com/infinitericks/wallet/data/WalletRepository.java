@@ -116,13 +116,19 @@ public final class WalletRepository {
         return apiClient;
     }
 
-    public String refreshBalance(String address) throws Exception {
-        try {
-            apiClient.invalidateBalanceCache(address);
-        } catch (IOException ignored) {
-            // Server may not require explicit invalidation.
+    public String refreshBalance(String address, boolean invalidateCache) throws Exception {
+        if (invalidateCache) {
+            try {
+                apiClient.invalidateBalanceCache(address);
+            } catch (IOException ignored) {
+                // Server may not require explicit invalidation.
+            }
         }
         return apiClient.getBalance(address);
+    }
+
+    public String refreshBalance(String address) throws Exception {
+        return refreshBalance(address, false);
     }
 
     public RickApiClient.NetworkStatus refreshNetworkStatus() throws Exception {

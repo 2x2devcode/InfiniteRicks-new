@@ -13,7 +13,7 @@ public final class RickHttpClientFactory {
     }
 
     public static OkHttpClient create(PinProvider pinProvider, String userAgent) {
-        return create(pinProvider, userAgent, Duration.ofSeconds(15), Duration.ofSeconds(30));
+        return create(pinProvider, userAgent, Duration.ofSeconds(20), Duration.ofSeconds(180));
     }
 
     public static OkHttpClient create(

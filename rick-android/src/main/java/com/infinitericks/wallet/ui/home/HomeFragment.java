@@ -19,6 +19,9 @@ import com.infinitericks.wallet.core.chain.NetworkParameters;
 import com.infinitericks.wallet.data.WalletRepository;
 import com.infinitericks.wallet.ui.MainActivity;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 public final class HomeFragment extends Fragment {
     private static final String TAG = "RickWallet";
 
@@ -36,35 +39,54 @@ public final class HomeFragment extends Fragment {
         balanceValue = view.findViewById(R.id.balanceValue);
         networkStatus = view.findViewById(R.id.networkStatus);
         Button refreshButton = view.findViewById(R.id.refreshButton);
-        refreshButton.setOnClickListener(v -> refresh());
-        refresh();
+        refreshButton.setOnClickListener(v -> refresh(true));
+        refresh(false);
     }
 
-    private void refresh() {
+    private void refresh(boolean invalidateCache) {
         if (!isAdded()) {
             return;
         }
         WalletRepository repository = ((MainActivity) requireActivity()).repository();
-        repository.activeAccount().ifPresentOrElse(account -> repository.runIo(() -> {
-            try {
-                RickApiClient.NetworkStatus status = repository.refreshNetworkStatus();
-                String balance = repository.refreshBalance(account.address());
-                postToUi(() -> {
-                    balanceValue.setText(balance + " " + NetworkParameters.TICKER);
-                    networkStatus.setText(
-                            "Rede: " + status.blocks() + " blocos via " + status.source()
-                                    + " | peers " + status.peers()
-                    );
-                });
-            } catch (Exception e) {
-                Log.e(TAG, "refresh failed", e);
-                String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-                postToUi(() -> {
-                    networkStatus.setText("Rede indisponível. Verifique API e explorer.");
-                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
-                });
-            }
-        }), () -> balanceValue.setText("Sem conta ativa"));
+        repository.activeAccount().ifPresentOrElse(account -> {
+            postToUi(() -> networkStatus.setText("Sincronizando rede..."));
+            repository.runIo(() -> {
+                RickApiClient.NetworkStatus status = null;
+                try {
+                    status = repository.refreshNetworkStatus();
+                    RickApiClient.NetworkStatus network = status;
+                    postToUi(() -> networkStatus.setText(
+                            "Rede: " + network.blocks() + " blocos via " + network.source()
+                                    + " | peers " + network.peers()
+                    ));
+                } catch (Exception e) {
+                    Log.e(TAG, "network status failed", e);
+                    String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                    postToUi(() -> {
+                        networkStatus.setText("Rede indisponível. Verifique API e explorer.");
+                        Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                    });
+                    return;
+                }
+
+                postToUi(() -> balanceValue.setText("Carregando saldo..."));
+                try {
+                    String balance = repository.refreshBalance(account.address(), invalidateCache);
+                    postToUi(() -> balanceValue.setText(formatBalance(balance) + " " + NetworkParameters.TICKER));
+                } catch (Exception e) {
+                    Log.e(TAG, "balance refresh failed", e);
+                    String message = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                    postToUi(() -> {
+                        balanceValue.setText("-- " + NetworkParameters.TICKER);
+                        Toast.makeText(requireContext(), "Saldo: " + message, Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
+        }, () -> balanceValue.setText("Sem conta ativa"));
+    }
+
+    private static String formatBalance(String balance) {
+        return new BigDecimal(balance.trim()).setScale(2, RoundingMode.DOWN).toPlainString();
     }
 
     private void postToUi(Runnable action) {

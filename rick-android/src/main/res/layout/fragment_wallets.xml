@@ -4,19 +4,24 @@
     android:layout_height="match_parent"
     android:background="@color/rick_background"
     android:orientation="vertical"
-    android:padding="20dp">
+    android:paddingStart="20dp"
+    android:paddingEnd="20dp"
+    android:paddingBottom="20dp"
+    android:paddingTop="100dp">
 
     <Button
         android:id="@+id/addWalletButton"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
         android:backgroundTint="@color/rick_green"
         android:text="Gerar novo endereço" />
 
     <Button
         android:id="@+id/exportWifButton"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
         android:layout_marginTop="12dp"
         android:backgroundTint="@color/rick_surface"
         android:text="Exportar WIF da conta ativa" />

@@ -1,7 +1,6 @@
 package com.infinitericks.wallet.ui;
 
 import android.os.Bundle;
-import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -26,6 +25,8 @@ import com.infinitericks.wallet.ui.wallets.WalletsFragment;
 
 public final class MainActivity extends AppCompatActivity {
     private static final String TAG = "RickWallet";
+    private static final int MIN_PIN_LENGTH = 6;
+    private static final int MAX_PIN_LENGTH = 10;
 
     private enum AuthMode {
         CREATE,
@@ -115,8 +116,8 @@ public final class MainActivity extends AppCompatActivity {
 
     private void onAuthPrimary() {
         String password = passwordInput.getText().toString();
-        if (TextUtils.isEmpty(password) || password.length() < 8) {
-            toast("Use uma senha com pelo menos 8 caracteres.");
+        if (!isValidPin(password)) {
+            toast("Use uma senha numérica de 6 a 10 dígitos.");
             return;
         }
         if (authMode == AuthMode.CREATE) {
@@ -124,6 +125,18 @@ public final class MainActivity extends AppCompatActivity {
         } else {
             unlock(password);
         }
+    }
+
+    private static boolean isValidPin(String password) {
+        if (password.length() < MIN_PIN_LENGTH || password.length() > MAX_PIN_LENGTH) {
+            return false;
+        }
+        for (int i = 0; i < password.length(); i++) {
+            if (!Character.isDigit(password.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void onAuthSecondary() {

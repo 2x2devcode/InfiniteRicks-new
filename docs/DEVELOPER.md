@@ -87,7 +87,7 @@ A API nao usa mais `getreceivedbyaddress` / `listunspent` do daemon (esses RPCs 
 |---|---|---|
 | `INDEX_DIR` | `~/.rick-wallet-index` | Pasta do indice persistido |
 | `INDEX_START_HEIGHT` | `0` | Bloco inicial da sincronizacao completa |
-| `INDEX_LOOKBACK_BLOCKS` | `5000` | Janela de varredura rapida para enderecos novos |
+| `INDEX_LOOKBACK_BLOCKS` | `2000` | Janela de varredura rapida para enderecos novos |
 
 Apos atualizar o servidor na VPS:
 
