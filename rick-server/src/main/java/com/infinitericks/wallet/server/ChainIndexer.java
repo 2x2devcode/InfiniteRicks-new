@@ -45,9 +45,11 @@ final class ChainIndexer {
     private static final Type STATE_TYPE = new TypeToken<PersistedState>() {
     }.getType();
     private static final int SYNC_BATCH_SIZE = 100;
-    private static final int DEFAULT_LOOKBACK_BLOCKS = readIntEnv("INDEX_LOOKBACK_BLOCKS", 2_000);
-    private static final int INCREMENTAL_SCAN_MAX_BLOCKS = readIntEnv("INDEX_INCREMENTAL_MAX", 2_000);
+    private static final int[] LOOKBACK_WINDOWS = readLookbackWindows();
+    private static final long QUERY_BUDGET_MS = readLongEnv("INDEX_QUERY_BUDGET_MS", 25_000L);
+    private static final int INCREMENTAL_SCAN_MAX_BLOCKS = readIntEnv("INDEX_INCREMENTAL_MAX", 500);
     private static final int START_HEIGHT = readIntEnv("INDEX_START_HEIGHT", 0);
+    private static final int SCAN_WORKERS = readIntEnv("INDEX_SCAN_WORKERS", 16);
 
     private final Path indexDir;
     private final Path statePath;
@@ -119,27 +121,85 @@ final class ChainIndexer {
     }
 
     List<IndexedUtxo> utxosFor(String address, int minConfirmations, RpcClient rpcClient) throws IOException {
+        if (!AddressCodec.isValidP2pkh(address)) {
+            throw new IOException("invalid address: " + address);
+        }
+
+        int tip;
+        int indexed;
+        Map<String, IndexedUtxo> merged = new LinkedHashMap<>();
         synchronized (memoryLock) {
-            if (!AddressCodec.isValidP2pkh(address)) {
-                throw new IOException("invalid address: " + address);
-            }
             chainTip = readBlockCount(rpcClient);
-            Map<String, IndexedUtxo> merged = new LinkedHashMap<>();
+            tip = chainTip;
+            indexed = indexedHeight;
             for (IndexedUtxo utxo : listIndexedUtxos(address, minConfirmations)) {
-                merged.put(outpointKey(utxo.txid, utxo.vout), utxo);
+                merged.put(outpointKey(utxo.txid, utxo.vout), copyUtxo(utxo));
             }
-            if (indexedHeight >= 0 && indexedHeight < chainTip) {
-                int blocksBehind = chainTip - indexedHeight;
-                if (blocksBehind <= INCREMENTAL_SCAN_MAX_BLOCKS) {
-                    mergeWindow(rpcClient, address, indexedHeight + 1, chainTip, minConfirmations, merged);
+        }
+
+        long deadline = System.currentTimeMillis() + QUERY_BUDGET_MS;
+
+        if (!merged.isEmpty() && indexed >= 0 && indexed < tip) {
+            int blocksBehind = tip - indexed;
+            if (blocksBehind <= INCREMENTAL_SCAN_MAX_BLOCKS) {
+                mergeWindow(rpcClient, address, indexed + 1, tip, minConfirmations, merged, tip, deadline);
+            }
+        }
+
+        if (merged.isEmpty()) {
+            for (int window : LOOKBACK_WINDOWS) {
+                if (System.currentTimeMillis() >= deadline || !merged.isEmpty()) {
+                    break;
+                }
+                int fromHeight = Math.max(START_HEIGHT, tip - window + 1);
+                mergeWindow(rpcClient, address, fromHeight, tip, minConfirmations, merged, tip, deadline);
+            }
+        }
+
+        if (!merged.isEmpty()) {
+            synchronized (memoryLock) {
+                chainTip = tip;
+                for (IndexedUtxo utxo : merged.values()) {
+                    addOutpoint(utxo.txid, utxo.vout, utxo.address, utxo.amountSatoshis, utxo.blockHeight);
                 }
             }
-            if (merged.isEmpty()) {
-                int fromHeight = Math.max(START_HEIGHT, chainTip - DEFAULT_LOOKBACK_BLOCKS + 1);
-                mergeWindow(rpcClient, address, fromHeight, chainTip, minConfirmations, merged);
-            }
-            return new ArrayList<>(merged.values());
         }
+
+        return finalizeUtxos(merged, tip, minConfirmations);
+    }
+
+    private static IndexedUtxo copyUtxo(IndexedUtxo source) {
+        IndexedUtxo copy = new IndexedUtxo();
+        copy.txid = source.txid;
+        copy.vout = source.vout;
+        copy.address = source.address;
+        copy.amountSatoshis = source.amountSatoshis;
+        copy.blockHeight = source.blockHeight;
+        copy.confirmations = source.confirmations;
+        return copy;
+    }
+
+    private List<IndexedUtxo> finalizeUtxos(Map<String, IndexedUtxo> merged, int tip, int minConfirmations) {
+        List<IndexedUtxo> result = new ArrayList<>();
+        for (IndexedUtxo utxo : merged.values()) {
+            int confirmations = Math.max(0, tip - utxo.blockHeight + 1);
+            if (confirmations >= minConfirmations) {
+                utxo.confirmations = confirmations;
+                result.add(utxo);
+            }
+        }
+        result.sort((a, b) -> {
+            int byHeight = Integer.compare(b.blockHeight, a.blockHeight);
+            if (byHeight != 0) {
+                return byHeight;
+            }
+            int byVout = Integer.compare(a.vout, b.vout);
+            if (byVout != 0) {
+                return byVout;
+            }
+            return a.txid.compareTo(b.txid);
+        });
+        return result;
     }
 
     private void mergeWindow(
@@ -148,12 +208,14 @@ final class ChainIndexer {
             int fromHeight,
             int toHeight,
             int minConfirmations,
-            Map<String, IndexedUtxo> merged
+            Map<String, IndexedUtxo> merged,
+            int tip,
+            long deadlineMs
     ) throws IOException {
-        if (fromHeight > toHeight) {
+        if (fromHeight > toHeight || System.currentTimeMillis() >= deadlineMs) {
             return;
         }
-        for (IndexedUtxo utxo : scanAddressWindow(rpcClient, address, fromHeight, toHeight, minConfirmations)) {
+        for (IndexedUtxo utxo : scanAddressWindow(rpcClient, address, fromHeight, toHeight, minConfirmations, tip, deadlineMs)) {
             merged.put(outpointKey(utxo.txid, utxo.vout), utxo);
         }
     }
@@ -211,21 +273,30 @@ final class ChainIndexer {
             String address,
             int fromHeight,
             int toHeight,
-            int minConfirmations
+            int minConfirmations,
+            int tip,
+            long deadlineMs
     ) throws IOException {
         Map<String, IndexedUtxo> live = new LinkedHashMap<>();
-        int workers = Math.min(8, Math.max(1, Runtime.getRuntime().availableProcessors()));
+        int workers = Math.min(SCAN_WORKERS, Math.max(1, Runtime.getRuntime().availableProcessors() * 2));
         ExecutorService pool = Executors.newFixedThreadPool(workers);
         try {
             List<Future<BlockScan>> futures = new ArrayList<>();
-            int chunk = Math.max(25, (toHeight - fromHeight + 1) / workers);
+            int totalBlocks = toHeight - fromHeight + 1;
+            int chunk = Math.max(10, totalBlocks / workers);
             for (int start = fromHeight; start <= toHeight; start += chunk) {
+                if (System.currentTimeMillis() >= deadlineMs) {
+                    break;
+                }
                 int end = Math.min(toHeight, start + chunk - 1);
                 int chunkStart = start;
-                futures.add(pool.submit(() -> scanAddressChunk(rpcClient, address, chunkStart, end)));
+                futures.add(pool.submit(() -> scanAddressChunk(rpcClient, address, chunkStart, end, deadlineMs)));
             }
             List<BlockScan> chunks = new ArrayList<>();
             for (Future<BlockScan> future : futures) {
+                if (System.currentTimeMillis() >= deadlineMs) {
+                    break;
+                }
                 chunks.add(future.get());
             }
             chunks.sort((a, b) -> Integer.compare(a.fromHeight(), b.fromHeight()));
@@ -244,7 +315,7 @@ final class ChainIndexer {
         }
         List<IndexedUtxo> result = new ArrayList<>();
         for (IndexedUtxo utxo : live.values()) {
-            int confirmations = confirmationsFor(utxo.blockHeight);
+            int confirmations = Math.max(0, tip - utxo.blockHeight + 1);
             if (confirmations >= minConfirmations) {
                 utxo.confirmations = confirmations;
                 result.add(utxo);
@@ -253,10 +324,19 @@ final class ChainIndexer {
         return result;
     }
 
-    private BlockScan scanAddressChunk(RpcClient rpcClient, String address, int fromHeight, int toHeight) throws IOException {
+    private BlockScan scanAddressChunk(
+            RpcClient rpcClient,
+            String address,
+            int fromHeight,
+            int toHeight,
+            long deadlineMs
+    ) throws IOException {
         Map<String, IndexedUtxo> created = new LinkedHashMap<>();
         List<String> spentKeys = new ArrayList<>();
         for (int height = fromHeight; height <= toHeight; height++) {
+            if (System.currentTimeMillis() >= deadlineMs) {
+                break;
+            }
             JsonObject block = fetchBlock(rpcClient, height);
             JsonArray transactions = block.getAsJsonArray("tx");
             if (transactions == null) {
@@ -558,6 +638,45 @@ final class ChainIndexer {
         } catch (NumberFormatException ignored) {
             return fallback;
         }
+    }
+
+    private static long readLongEnv(String key, long fallback) {
+        String value = System.getenv(key);
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
+    }
+
+    private static int[] readLookbackWindows() {
+        String value = System.getenv("INDEX_LOOKBACK_WINDOWS");
+        if (value == null || value.isBlank()) {
+            return new int[]{150, 400, 800};
+        }
+        String[] parts = value.split(",");
+        List<Integer> windows = new ArrayList<>();
+        for (String part : parts) {
+            try {
+                int parsed = Integer.parseInt(part.trim());
+                if (parsed > 0) {
+                    windows.add(parsed);
+                }
+            } catch (NumberFormatException ignored) {
+                // Skip invalid entries.
+            }
+        }
+        if (windows.isEmpty()) {
+            return new int[]{150, 400, 800};
+        }
+        int[] result = new int[windows.size()];
+        for (int i = 0; i < windows.size(); i++) {
+            result[i] = windows.get(i);
+        }
+        return result;
     }
 
     private static void sleepQuietly(long millis) {

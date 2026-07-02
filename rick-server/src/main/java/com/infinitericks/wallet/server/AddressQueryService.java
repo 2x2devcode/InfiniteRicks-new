@@ -6,21 +6,19 @@ import com.google.gson.JsonObject;
 import com.infinitericks.wallet.core.wallet.Amount;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Resolves balance and UTXOs for arbitrary P2PKH addresses via the chain indexer.
  */
 final class AddressQueryService {
+    private static final long BALANCE_CACHE_MS = 30_000L;
+
     private final RpcClient rpcClient;
     private final ChainIndexer indexer;
+    private final Map<String, CachedBalance> balanceCache = new ConcurrentHashMap<>();
 
     AddressQueryService(RpcClient rpcClient, ChainIndexer indexer) {
         this.rpcClient = rpcClient;
@@ -28,13 +26,13 @@ final class AddressQueryService {
     }
 
     JsonObject balance(String address) throws IOException {
+        CachedBalance cached = balanceCache.get(address);
+        if (cached != null && cached.expiresAtMs > System.currentTimeMillis()) {
+            return balanceResponse(address, cached.satoshis);
+        }
         long satoshis = indexer.balanceSatoshis(address, 1, rpcClient);
-        JsonObject out = new JsonObject();
-        out.addProperty("balance", Amount.fromSatoshis(satoshis));
-        out.addProperty("address", address);
-        out.addProperty("indexedHeight", indexer.indexedHeight());
-        out.addProperty("chainTip", indexer.chainTip());
-        return out;
+        balanceCache.put(address, new CachedBalance(satoshis, System.currentTimeMillis() + BALANCE_CACHE_MS));
+        return balanceResponse(address, satoshis);
     }
 
     JsonObject utxos(String address) throws IOException {
@@ -53,9 +51,25 @@ final class AddressQueryService {
         return out;
     }
 
+    void invalidate(String address) {
+        balanceCache.remove(address);
+    }
+
+    private JsonObject balanceResponse(String address, long satoshis) {
+        JsonObject out = new JsonObject();
+        out.addProperty("balance", Amount.fromSatoshis(satoshis));
+        out.addProperty("address", address);
+        out.addProperty("indexedHeight", indexer.indexedHeight());
+        out.addProperty("chainTip", indexer.chainTip());
+        return out;
+    }
+
     static AddressQueryService create(RpcClient rpcClient) throws IOException {
         ChainIndexer indexer = ChainIndexer.open();
         indexer.startBackgroundSync(rpcClient);
         return new AddressQueryService(rpcClient, indexer);
+    }
+
+    private record CachedBalance(long satoshis, long expiresAtMs) {
     }
 }

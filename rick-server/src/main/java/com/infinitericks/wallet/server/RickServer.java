@@ -57,7 +57,7 @@ final class RickApiService {
     }
 
     void invalidate(String address) {
-        // Balance is derived from the chain indexer; nothing to invalidate per address.
+        addressQuery.invalidate(address);
     }
 }
 

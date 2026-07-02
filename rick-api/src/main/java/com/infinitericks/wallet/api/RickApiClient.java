@@ -60,7 +60,7 @@ public final class RickApiClient {
 
     public String getBalance(String address) throws IOException {
         try {
-            return getJson(String.format(Locale.US, ApiEndpoints.ADDRESS_BALANCE, address), true)
+            return getJsonOnce(String.format(Locale.US, ApiEndpoints.ADDRESS_BALANCE, address), true)
                     .get("balance")
                     .getAsString();
         } catch (IOException officialError) {
@@ -162,6 +162,28 @@ public final class RickApiClient {
                     json.has("connections") ? json.get("connections").getAsInt() : 0
             );
         }
+    }
+
+    private JsonObject getJsonOnce(String path, boolean officialOnly) throws IOException {
+        List<String> urls = officialOnly ? baseUrls : List.of(NetworkParameters.EXPLORER_BASE_URL);
+        IOException last = null;
+        for (String baseUrl : urls) {
+            Request request = new Request.Builder().url(baseUrl + path).get().build();
+            try (Response response = httpClient.newCall(request).execute()) {
+                String body = response.body() == null ? "" : response.body().string();
+                if (!response.isSuccessful()) {
+                    throw new IOException("HTTP " + response.code() + " for " + path + ": " + body);
+                }
+                JsonObject json = gson.fromJson(body, JsonObject.class);
+                if (json.has("error")) {
+                    throw new IOException(json.get("error").getAsString());
+                }
+                return json;
+            } catch (IOException e) {
+                last = e;
+            }
+        }
+        throw last == null ? new IOException("request failed") : last;
     }
 
     private JsonObject getJson(String path, boolean officialOnly) throws IOException {

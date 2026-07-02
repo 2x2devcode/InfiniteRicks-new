@@ -29,7 +29,7 @@ import java.util.concurrent.TimeoutException;
 
 public final class HomeFragment extends Fragment {
     private static final String TAG = "RickWallet";
-    private static final long BALANCE_TIMEOUT_SECONDS = 120L;
+    private static final long BALANCE_TIMEOUT_SECONDS = 45L;
 
     private final ExecutorService balanceExecutor = Executors.newSingleThreadExecutor();
 
