@@ -98,3 +98,27 @@ check_api() {
 
 check_api "3) API local ${BIND_HOST}:${API_PORT}/api/health" "http://${BIND_HOST}:${API_PORT}/api/health"
 check_api "4) Explorer local ${BIND_HOST}:${EXPLORER_PORT}/ext/health" "http://${BIND_HOST}:${EXPLORER_PORT}/ext/health"
+
+TEST_ADDRESS="1AYqgJLpBzhyfejNNMJtyZ4QTcMmi8RU9g"
+echo "5) Balance local (deve responder em <3s, sem nginx)"
+BALANCE_START="$(date +%s%3N 2>/dev/null || python3 -c 'import time; print(int(time.time()*1000))')"
+BALANCE_BODY="$(curl -sS --max-time 3 "http://${BIND_HOST}:${API_PORT}/api/address/${TEST_ADDRESS}/balance" 2>/dev/null || true)"
+BALANCE_END="$(date +%s%3N 2>/dev/null || python3 -c 'import time; print(int(time.time()*1000))')"
+ELAPSED=$((BALANCE_END - BALANCE_START))
+if echo "$BALANCE_BODY" | grep -q '"address"'; then
+  echo "   OK (${ELAPSED}ms): $BALANCE_BODY"
+  if (( ELAPSED > 3000 )); then
+    echo "   AVISO: lento — confirme git pull + bash scripts/restart-server-services.sh"
+  fi
+elif [[ -z "$BALANCE_BODY" ]]; then
+  echo "   FALHA: sem resposta em 3s (API travada ou build antigo)"
+  echo "   Execute na VPS:"
+  echo "     git pull origin main"
+  echo "     bash scripts/restart-server-services.sh"
+else
+  echo "   FALHA (${ELAPSED}ms): $BALANCE_BODY"
+fi
+echo ""
+
+echo "6) Se o passo 5 for OK mas https://server.infinitericks.com der 504,"
+echo "   o problema e nginx/proxy — confirme proxy_pass http://127.0.0.1:${API_PORT};"

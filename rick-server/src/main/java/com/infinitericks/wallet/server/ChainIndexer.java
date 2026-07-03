@@ -165,7 +165,6 @@ final class ChainIndexer {
         if (!AddressCodec.isValidP2pkh(address)) {
             throw new IOException("invalid address: " + address);
         }
-        refreshChainTip(rpcClient);
         List<IndexedUtxo> indexed = readIndexedOnly(address, minConfirmations);
         long total = 0L;
         for (IndexedUtxo utxo : indexed) {
@@ -179,26 +178,14 @@ final class ChainIndexer {
     }
 
     List<IndexedUtxo> utxosFor(String address, int minConfirmations, RpcClient rpcClient) throws IOException {
-        refreshChainTip(rpcClient);
+        if (!AddressCodec.isValidP2pkh(address)) {
+            throw new IOException("invalid address: " + address);
+        }
         List<IndexedUtxo> indexed = readIndexedOnly(address, minConfirmations);
         if (indexed.isEmpty()) {
             scheduleDeepScan(address, minConfirmations, rpcClient);
         }
         return indexed;
-    }
-
-    private void refreshChainTip(RpcClient rpcClient) throws IOException {
-        if (System.currentTimeMillis() - chainTipUpdatedAtMs < CHAIN_TIP_STALE_MS) {
-            return;
-        }
-        int tip = readBlockCount(rpcClient);
-        writeLock.lock();
-        try {
-            chainTip = tip;
-            chainTipUpdatedAtMs = System.currentTimeMillis();
-        } finally {
-            writeLock.unlock();
-        }
     }
 
     private List<IndexedUtxo> readIndexedOnly(String address, int minConfirmations) {
