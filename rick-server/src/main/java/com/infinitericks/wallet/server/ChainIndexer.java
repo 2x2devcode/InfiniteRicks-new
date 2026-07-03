@@ -58,9 +58,17 @@ final class ChainIndexer {
     private static final int SCAN_WORKERS = readIntEnv("INDEX_SCAN_WORKERS", 4);
     private static final long CHUNK_TIMEOUT_MS = readLongEnv("INDEX_CHUNK_TIMEOUT_MS", 4_000L);
     private static final long CHAIN_TIP_STALE_MS = readLongEnv("INDEX_CHAIN_TIP_STALE_MS", 5_000L);
+    private static final int REVERSE_SCAN_MAX_BLOCKS = readIntEnv("INDEX_REVERSE_SCAN_MAX", 10_000);
+
+    @FunctionalInterface
+    interface AddressUpdateListener {
+        void onAddressUpdated(String address);
+    }
 
     private final ExecutorService addressScanExecutor = Executors.newFixedThreadPool(2);
     private final Set<String> pendingAddressScans = ConcurrentHashMap.newKeySet();
+    private final Set<String> pendingExplorerEnrich = ConcurrentHashMap.newKeySet();
+    private volatile AddressUpdateListener addressUpdateListener;
 
     private final Path indexDir;
     private final Path statePath;
@@ -90,6 +98,10 @@ final class ChainIndexer {
         ChainIndexer indexer = new ChainIndexer(indexDir);
         indexer.loadState();
         return indexer;
+    }
+
+    void setAddressUpdateListener(AddressUpdateListener listener) {
+        this.addressUpdateListener = listener;
     }
 
     void startBackgroundSync(RpcClient rpcClient) {
@@ -241,6 +253,10 @@ final class ChainIndexer {
         }
 
         if (merged.isEmpty()) {
+            mergeReverseFromTip(rpcClient, address, tip, minConfirmations, merged, deadline);
+        }
+
+        if (merged.isEmpty()) {
             for (int window : windows) {
                 if (System.currentTimeMillis() >= deadline || !merged.isEmpty()) {
                     break;
@@ -262,9 +278,127 @@ final class ChainIndexer {
                 writeLock.unlock();
             }
             persistState();
+            notifyAddressUpdated(address);
         }
 
         return finalizeUtxos(merged, tip, minConfirmations);
+    }
+
+    void scheduleExplorerEnrich(String address, OfficialExplorerClient explorer, RpcClient rpcClient) {
+        if (!explorer.enabled() || !pendingExplorerEnrich.add(address)) {
+            return;
+        }
+        addressScanExecutor.submit(() -> {
+            try {
+                enrichFromExplorer(address, explorer, rpcClient);
+            } catch (IOException e) {
+                System.err.println("[chain-indexer] explorer enrich failed for " + address + ": " + e.getMessage());
+            } finally {
+                pendingExplorerEnrich.remove(address);
+            }
+        });
+    }
+
+    private void enrichFromExplorer(String address, OfficialExplorerClient explorer, RpcClient rpcClient)
+            throws IOException {
+        List<String> txids = explorer.recentTxids(address, 20);
+        if (txids.isEmpty()) {
+            return;
+        }
+        boolean changed = false;
+        for (String txid : txids) {
+            if (indexRawTransaction(txid, address, rpcClient)) {
+                changed = true;
+            }
+        }
+        if (changed) {
+            persistState();
+            notifyAddressUpdated(address);
+        }
+    }
+
+    private boolean indexRawTransaction(String txid, String address, RpcClient rpcClient) throws IOException {
+        JsonArray params = new JsonArray();
+        params.add(txid);
+        params.add(1);
+        JsonObject tx;
+        try {
+            tx = rpcClient.call("getrawtransaction", params).getAsJsonObject();
+        } catch (IOException e) {
+            System.err.println("[chain-indexer] getrawtransaction " + txid + ": " + e.getMessage());
+            return false;
+        }
+        if (!tx.has("blockheight")) {
+            return false;
+        }
+        int blockHeight = tx.get("blockheight").getAsInt();
+        Map<String, IndexedUtxo> created = new LinkedHashMap<>();
+        List<String> spentKeys = new ArrayList<>();
+        scanTransactionForAddress(tx, blockHeight, address, created, spentKeys);
+
+        if (created.isEmpty() && spentKeys.isEmpty()) {
+            return false;
+        }
+
+        writeLock.lock();
+        try {
+            chainTip = Math.max(chainTip, blockHeight);
+            chainTipUpdatedAtMs = System.currentTimeMillis();
+            for (String spentKey : spentKeys) {
+                removeOutpointByKey(spentKey);
+            }
+            for (IndexedUtxo utxo : created.values()) {
+                addOutpoint(utxo.txid, utxo.vout, utxo.address, utxo.amountSatoshis, utxo.blockHeight);
+            }
+        } finally {
+            writeLock.unlock();
+        }
+        return true;
+    }
+
+    private void mergeReverseFromTip(
+            RpcClient rpcClient,
+            String address,
+            int tip,
+            int minConfirmations,
+            Map<String, IndexedUtxo> merged,
+            long deadlineMs
+    ) throws IOException {
+        int fromHeight = Math.max(START_HEIGHT, tip - REVERSE_SCAN_MAX_BLOCKS + 1);
+        for (int height = tip; height >= fromHeight; height--) {
+            if (System.currentTimeMillis() >= deadlineMs) {
+                break;
+            }
+            JsonObject block = fetchBlock(rpcClient, height);
+            JsonArray transactions = block.getAsJsonArray("tx");
+            if (transactions == null) {
+                continue;
+            }
+            for (JsonElement txElement : transactions) {
+                if (!txElement.isJsonObject()) {
+                    continue;
+                }
+                Map<String, IndexedUtxo> created = new LinkedHashMap<>();
+                List<String> spentKeys = new ArrayList<>();
+                scanTransactionForAddress(txElement.getAsJsonObject(), height, address, created, spentKeys);
+                for (IndexedUtxo utxo : created.values()) {
+                    merged.put(outpointKey(utxo.txid, utxo.vout), utxo);
+                }
+                for (String spentKey : spentKeys) {
+                    merged.remove(spentKey);
+                }
+            }
+            if (!merged.isEmpty()) {
+                break;
+            }
+        }
+    }
+
+    private void notifyAddressUpdated(String address) {
+        AddressUpdateListener listener = addressUpdateListener;
+        if (listener != null) {
+            listener.onAddressUpdated(address);
+        }
     }
 
     private boolean scheduleDeepScan(String address, int minConfirmations, RpcClient rpcClient) {
@@ -673,6 +807,14 @@ final class ChainIndexer {
         if (removed != null) {
             removeFromAddressIndex(removed.address, key);
         }
+    }
+
+    private void removeOutpointByKey(String key) {
+        int separator = key.lastIndexOf(':');
+        if (separator <= 0 || separator >= key.length() - 1) {
+            return;
+        }
+        removeOutpoint(key.substring(0, separator), Integer.parseInt(key.substring(separator + 1)));
     }
 
     private void removeFromAddressIndex(String address, String key) {

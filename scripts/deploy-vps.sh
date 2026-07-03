@@ -34,6 +34,9 @@ ELAPSED=$((END - START))
 
 if echo "$BODY" | grep -q '"address"'; then
   echo "   OK (${ELAPSED}ms): $BODY"
+  if echo "$BODY" | grep -q '"balance":"0'; then
+    echo "   AVISO: saldo zero — aguarde enrich do explorer ou verifique EXPLORER_FALLBACK_ENABLED"
+  fi
 else
   echo "   FALHA (${ELAPSED}ms): $BODY"
   echo "   Log: ${LOG_DIR:-${ROOT_DIR}/logs}/rick-api.log"
